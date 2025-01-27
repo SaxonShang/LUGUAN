@@ -1,42 +1,43 @@
-# 智能艺术魔镜
+# Smart Art Glasses Project
 
-## 简介
+## Introduction
 
-该项目基于树莓派 Zero 和 YOLO 模型，结合 AI 绘画工具和传感器，生成独特的艺术作品。通过 Pi Camera 检测人脸并自动拍照，再根据用户输入和实时温度调节风格，将生成的艺术作品展示在 LED 显示屏上。
-
----
-
-## 功能特点
-
-1. **人脸检测与拍照**
-   - 使用 YOLO 模型实时检测人脸并自动拍照。
-   - 用户可设置拍照的间隔时间。
-
-2. **AI 绘画**
-   - 将照片上传至 Firebase，通过 AI 绘画工具生成艺术作品。
-   - 支持根据用户输入的情感文字和温度传感器的数据动态调整绘画风格。
-
-3. **LED 显示屏**
-   - 实时展示生成的艺术作品。
-
-4. **用户界面**
-   - 提供一个用户界面，用于：
-     - 输入文字描述。
-     - 选择绘画风格。
-     - 查看当前温度。
-     - 清理存储的历史数据。
+The Smart Art Glasses project is built on a Raspberry Pi Zero, utilizing a YOLO model, Pi Camera, temperature sensor, and AI art tools to create personalized artworks. It detects faces, automatically takes photos, and adjusts the artistic style dynamically based on user input and real-time temperature data. The final artworks are displayed on an LED screen.
 
 ---
 
-## 环境要求
+## Features
 
-- **硬件**
-  - 树莓派 Zero
-  - Pi Camera
-  - LED 显示屏
-  - 温度传感器
+1. **Face Detection and Photography**  
+   - Real-time face detection using the YOLO model with automatic photo capture.  
+   - Allows users to set a custom time interval for photo capturing.
 
-- **软件**
-  - Python 3.9 或以上
-  - Firebase
-  - MQTT Broker
+2. **AI Art Processing**  
+   - Uploads captured photos to Firebase and processes them using AI art tools.  
+   - Dynamically adjusts the artistic style based on user input and temperature data.
+
+3. **LED Screen Display**  
+   - Displays the generated artworks in real-time on an LED screen.
+
+4. **User Interface**  
+   - A simple user interface to:  
+     - Input text to describe emotions.  
+     - Select an art style.  
+     - View real-time temperature data.  
+     - Clear stored photos from the database.
+
+---
+
+## Requirements
+
+### Hardware
+- Raspberry Pi Zero
+- Pi Camera
+- LED Screen
+- Temperature Sensor
+
+### Software
+- Python 3.9 or higher
+- Firebase project and storage setup
+- MQTT Broker
+
