@@ -1,4 +1,4 @@
-# Smart Art Glasses Project
+# Smart Art Displayer Project
 
 ## Introduction
 
