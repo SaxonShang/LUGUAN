@@ -1,0 +1,12 @@
+{
+    "firebase": {
+      "api_key": "your_api_key",
+      "auth_domain": "your_project.firebaseapp.com",
+      "storage_bucket": "your_project.appspot.com"
+    },
+    "mqtt": {
+      "broker": "mqtt.example.com",
+      "port": 1883
+    }
+  }
+  

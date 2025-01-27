@@ -1,0 +1,5 @@
+{
+    "model_path": "yolov5n.pt",
+    "confidence_threshold": 0.5
+  }
+  
