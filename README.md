@@ -2,7 +2,7 @@
 
 ## Introduction
 
-The Smart Art Glasses project is built on a Raspberry Pi Zero, utilizing a YOLO model, Pi Camera, temperature sensor, and AI art tools to create personalized artworks. It detects faces, automatically takes photos, and adjusts the artistic style dynamically based on user input and real-time temperature data. The final artworks are displayed on an LED screen.
+The Smart Art Displayer project is built on a Raspberry Pi Zero, utilizing a YOLO model, Pi Camera, temperature sensor, and AI art tools to create personalized artworks. It detects faces, automatically takes photos, and adjusts the artistic style dynamically based on user input and real-time temperature data. The final artworks are displayed on an LED screen.
 
 ---
 
