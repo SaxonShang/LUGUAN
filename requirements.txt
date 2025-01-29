@@ -1,8 +1,34 @@
-opencv-python
+# Core Python Libraries
+numpy
+pandas
+
+# Camera & Image Processing
+picamera2
+opencv-python-headless  # Headless version for Raspberry Pi
+
+# UI Framework
+PyQt5
+
+# Object Detection (YOLO)
 torch
-pillow
-flask
+torchvision
+ultralytics  # YOLOv5 model loading
+
+# Firebase Integration
 firebase-admin
-requests
+
+# MQTT for AI Communication
 paho-mqtt
-pytest
+
+# Web Requests (AI API)
+requests
+
+# Displaying Images on LED Screen
+pygame
+
+# Utilities
+pillow  # Image processing
+json5   # JSON parsing with comments support
+
+# System Monitoring (if needed)
+psutil
