@@ -1,5 +1,4 @@
 import cv2
-import numpy as np
 import pygame
 
 def display_image(image_path):

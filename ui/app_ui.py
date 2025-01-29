@@ -4,7 +4,7 @@ from PyQt5.QtCore import QTimer
 from app.camera import Camera
 from app.yolo_model import YOLO
 from app.temp_sensor import get_temperature, get_humidity
-from app.mqtt_client import publish_image
+from app.firebase_client import upload_to_firebase, get_firebase_image_url
 
 class CameraApp(QWidget):
     def __init__(self):
@@ -22,7 +22,8 @@ class CameraApp(QWidget):
         main_layout.addWidget(self.text_input)
 
         self.object_select = QComboBox()
-        self.object_select.addItems(["Person", "Tie"])
+        self.object_select.addItems(["Person", "Tie", "Car", "Dog", "Bike", "Cat", "Laptop", "Phone", "Bottle", "Book"])
+        self.object_select.currentIndexChanged.connect(self.update_displayed_image)
         main_layout.addWidget(self.object_select)
 
         self.sensor_select = QComboBox()
@@ -49,43 +50,53 @@ class CameraApp(QWidget):
         self.yolo = YOLO(model_path="models/yolov5s.pt")
 
         self.timer = QTimer()
-        self.timer.timeout.connect(self.detect_and_capture)
+        self.timer.timeout.connect(self.detect_and_store)
         self.timer.start(1000)
 
-    def detect_and_capture(self):
-        """Detect objects and capture images automatically."""
+        self.detected_objects = {}
+
+    def detect_and_store(self):
+        """Detects objects and captures their images (first time only)."""
         frame = self.camera.capture_frame()
         detections = self.yolo.detect_objects(frame)
-        selected_object = self.object_select.currentText().lower()
+
+        detected_image_path = None
+        new_objects = []
 
         for obj in detections:
-            if obj == selected_object:
-                image_path = "ui/captured_images/captured.jpg"
+            if obj not in self.detected_objects:
+                image_path = f"ui/captured_images/{obj}.jpg"
                 self.camera.capture_image(image_path)
-                self.display_image(image_path)
+                self.detected_objects[obj] = image_path
+                detected_image_path = image_path
+                new_objects.append(obj)
 
-                # Get temperature or humidity based on selection
-                sensor_value = get_temperature() if self.sensor_select.currentText() == "Temperature" else get_humidity()
+        if detected_image_path:
+            # Upload all newly detected objects to Firebase (same image if they appear in the same frame)
+            for obj in new_objects:
+                upload_to_firebase(detected_image_path, obj)
 
-                metadata = {
-                    "temperature": sensor_value,
-                    "humidity": get_humidity(),
-                    "text": self.text_input.text(),
-                    "object": selected_object
-                }
-
-                # Send data to MQTT for AI processing
-                publish_image(image_path, metadata)
-                print(f"Image and metadata sent to AI via MQTT: {metadata}")
-                break
+        self.update_displayed_image()
 
     def capture_image(self):
-        """Manually capture an image."""
+        """Manually captures an image."""
         image_path = "ui/captured_images/manual_capture.jpg"
         self.camera.capture_image(image_path)
         self.display_image(image_path)
 
+    def update_displayed_image(self):
+        """Updates the displayed image based on the selected object."""
+        selected_object = self.object_select.currentText().lower()
+        if selected_object in self.detected_objects:
+            self.display_image(self.detected_objects[selected_object])
+        else:
+            firebase_url = get_firebase_image_url(selected_object)
+            if firebase_url:
+                self.display_image(firebase_url)
+            else:
+                print(f"No image found for {selected_object}")
+
     def display_image(self, image_path):
-        """Displays the captured image."""
+        """Displays the selected image."""
         pixmap = QPixmap(image_path)
         self.image_label.setPixmap(pixmap)

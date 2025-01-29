@@ -1,0 +1,4 @@
+{
+    "service_account": "path/to/serviceAccountKey.json",
+    "storage_bucket": "your-firebase-app.appspot.com"
+}

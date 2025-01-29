@@ -1,0 +1,4 @@
+{
+    "api_url": "https://api.deepai.org/api/text2img",
+    "api_key": "your-api-key"
+}
