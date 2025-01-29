@@ -1,8 +1,0 @@
-opencv-python
-torch
-pillow
-flask
-firebase-admin
-requests
-paho-mqtt
-pytest

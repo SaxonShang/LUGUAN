@@ -1,14 +1,15 @@
 import torch
+import cv2
+import numpy as np
 
 class YOLO:
-    def __init__(self, model_path="yolov5n.pt"):
-        self.model = torch.hub.load('ultralytics/yolov5', 'custom', path=model_path)
-    
-    def detect_faces(self, frame):
+    def __init__(self, model_path="models/yolov5s.pt"):
+        self.model = torch.hub.load("ultralytics/yolov5", "custom", path=model_path)
+
+    def detect_objects(self, frame):
+        """Detect objects in a frame and return class labels."""
         results = self.model(frame)
         detections = []
         for *box, conf, cls in results.xyxy[0]:
-            if int(cls) == 0:  # 0代表'person'
-                x1, y1, x2, y2 = map(int, box)
-                detections.append((x1, y1, x2 - x1, y2 - y1))
+            detections.append(self.model.names[int(cls)])
         return detections
