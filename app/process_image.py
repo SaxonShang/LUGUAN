@@ -1,8 +1,27 @@
-import requests
+from app.camera import Camera
+from app.yolo_model import YOLO
+from app.temp_sensor import get_temperature, get_humidity
+from app.firebase_client import upload_to_firebase
+from app.http_client import send_metadata_to_ai
 
-def process_image(image_url, style, temperature):
-    payload = {"image_url": image_url, "style": style, "temperature": temperature}
-    response = requests.post("https://ai-art-api.com/process", json=payload)
-    processed_image_url = response.json().get("processed_image_url")
-    print(f"AI处理后的图片地址: {processed_image_url}")
-    return processed_image_url
+def process_image():
+    """Captures an image, uploads it to Firebase, and sends metadata to AI."""
+    camera = Camera()
+    object_name = "person"  # Example, this can be user-selected
+    image_path = f"ui/captured_images/{object_name}.jpg"
+
+    camera.capture_image(image_path)
+
+    # Upload image to Firebase
+    image_url = upload_to_firebase(image_path, object_name)
+
+    # Get temperature and humidity readings
+    metadata = {
+        "temperature": get_temperature(),
+        "humidity": get_humidity(),
+        "text": "User input text",
+        "object": object_name
+    }
+
+    # Send metadata to AI for processing
+    send_metadata_to_ai(metadata)

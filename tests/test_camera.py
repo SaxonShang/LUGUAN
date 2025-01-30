@@ -1,7 +1,19 @@
-import pytest
-from app.camera import capture_and_detect
+import unittest
+from app.camera import Camera
+import os
 
-def test_capture_and_detect():
-    # 测试是否能正确保存图片
-    result = capture_and_detect(output_path="test_image.jpg")
-    assert result is not None, "摄像头未捕获到图像"
+class TestCamera(unittest.TestCase):
+    def setUp(self):
+        self.camera = Camera()
+        self.image_path = "tests/test_image.jpg"
+
+    def test_capture_image(self):
+        result = self.camera.capture_image(self.image_path)
+        self.assertTrue(os.path.exists(self.image_path))
+
+    def tearDown(self):
+        if os.path.exists(self.image_path):
+            os.remove(self.image_path)
+
+if __name__ == "__main__":
+    unittest.main()

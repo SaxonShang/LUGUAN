@@ -1,15 +1,20 @@
 import cv2
-from picamera2 import Picamera2
 
 class Camera:
     def __init__(self):
-        self.picam2 = Picamera2()
-        self.picam2.start()
+        self.camera = cv2.VideoCapture(0)  # Use Raspberry Pi Camera
 
-    def capture_frame(self):
-        """Capture a frame from the camera."""
-        return self.picam2.capture_array()
+    def capture_image(self, save_path):
+        """Captures an image and saves it to the specified path."""
+        ret, frame = self.camera.read()
+        if ret:
+            cv2.imwrite(save_path, frame)
+            print(f"✅ Image saved: {save_path}")
+            return save_path
+        else:
+            print("❌ Failed to capture image")
+            return None
 
-    def capture_image(self, path="captured.jpg"):
-        """Capture and save an image."""
-        self.picam2.capture_file(path)
+    def release(self):
+        """Releases the camera."""
+        self.camera.release()
