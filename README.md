@@ -22,9 +22,10 @@ The Smart Art Displayer project is built on a Raspberry Pi Zero, utilizing a YOL
 4. **User Interface**  
    - A simple user interface to:  
      - Input text to describe emotions.  
-     - Select an art style.  
+     - Select an art style.
+     - Select the object as a base of art  
      - View real-time temperature data.  
-     - Clear stored photos from the database.
+     - Stored photos from the database.
 
 ---
 
@@ -32,9 +33,9 @@ The Smart Art Displayer project is built on a Raspberry Pi Zero, utilizing a YOL
 
 ### Hardware
 - Raspberry Pi Zero
-- Pi Camera
+- Pi Camera V2
 - LED Screen
-- Temperature Sensor
+- I2C Sensor
 
 ### Software
 - Python 3.9 or higher
