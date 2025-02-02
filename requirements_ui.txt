@@ -1,0 +1,26 @@
+# Core Libraries
+numpy
+opencv-python-headless
+
+# UI Framework (Laptop only)
+PyQt5
+
+# Object Detection
+torch
+torchvision
+ultralytics
+
+# Firebase
+firebase-admin
+
+# MQTT
+paho-mqtt
+
+# Web Requests (AI API)
+requests
+
+# Utilities
+pillow
+json5
+logging
+psutil
