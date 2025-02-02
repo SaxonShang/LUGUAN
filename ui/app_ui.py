@@ -1,9 +1,15 @@
 from PyQt5.QtWidgets import QApplication, QLabel, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLineEdit, QComboBox
 from PyQt5.QtGui import QPixmap
 import paho.mqtt.client as mqtt
-import json
 import requests
-from config import mqtt_config
+import json
+import os
+
+config_path = os.path.join(os.path.dirname(__file__), "../config/mqtt_config.json")
+
+with open(config_path, "r") as f:
+    mqtt_config = json.load(f)
+
 
 class CameraApp(QWidget):
     def __init__(self):
