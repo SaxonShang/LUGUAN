@@ -1,44 +1,75 @@
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException
 from firebase_admin import credentials, initialize_app, storage
 import paho.mqtt.client as mqtt
 import json
+import requests
+from config import ai_config, mqtt_config
 
 app = FastAPI()
 
-# Firebase Setup
+# 🔹 Firebase Setup
 cred = credentials.Certificate("config/firebase_config.json")
-initialize_app(cred, {"storageBucket": "your-firebase-bucket"})
+initialize_app(cred, {"storageBucket": ai_config["firebase_bucket"]})
 bucket = storage.bucket()
 
-# MQTT Configuration
-MQTT_BROKER = "your-mqtt-broker"
-MQTT_PORT = 1883
-MQTT_TOPIC = "ai/image_result"
+# 🔹 MQTT Setup
+MQTT_BROKER = mqtt_config["broker"]
+MQTT_PORT = mqtt_config["port"]
+MQTT_TOPIC = "ai/processed_image"
 
 def send_mqtt_message(image_url):
     """Sends AI-generated image URL via MQTT to Raspberry Pi."""
-    client = mqtt.Client()
-    client.connect(MQTT_BROKER, MQTT_PORT, 60)
-    client.publish(MQTT_TOPIC, image_url)
-    client.disconnect()
+    try:
+        client = mqtt.Client()
+        client.connect(MQTT_BROKER, MQTT_PORT, 60)
+        payload = json.dumps({"image_url": image_url})
+        client.publish(MQTT_TOPIC, payload)
+        client.disconnect()
+        print(f"✅ AI-generated image sent via MQTT: {image_url}")
+    except Exception as e:
+        print(f"❌ Error sending MQTT message: {e}")
 
 @app.post("/process_image")
 async def process_image(data: dict):
     """Receives metadata from Raspberry Pi, fetches the image from Firebase, and sends it for AI processing."""
-    object_detected = data.get("object_detected")
+    try:
+        object_detected = data.get("object")
+        user_text = data.get("text")
+        temperature = data.get("temperature")
+        humidity = data.get("humidity")
 
-    # Check if image exists in Firebase
-    blob = bucket.blob(f"captured_images/{object_detected}.jpg")
-    if not blob.exists():
-        raise HTTPException(status_code=404, detail="Image not found in Firebase")
+        # ✅ **Fetch the latest image URL from Firebase**
+        blob = bucket.blob(f"captured_images/{object_detected}.jpg")
+        if not blob.exists():
+            raise HTTPException(status_code=404, detail=f"❌ Image not found for {object_detected}")
 
-    # AI Processing (Placeholder - Replace with actual AI logic)
-    ai_generated_image_url = f"https://your-firebase-bucket/ai_generated/{object_detected}.jpg"
+        image_url = f"https://{ai_config['firebase_bucket']}/captured_images/{object_detected}.jpg"
+        print(f"🖼️ Found image: {image_url}")
 
-    # Send AI-generated image URL via MQTT
-    send_mqtt_message(ai_generated_image_url)
+        # ✅ **Send Image & Metadata to AI Processing API**
+        ai_payload = {
+            "image_url": image_url,
+            "text": user_text,
+            "temperature": temperature,
+            "humidity": humidity
+        }
+        response = requests.post(ai_config["api_endpoint"], json=ai_payload)
 
-    return {"status": "Processing Started", "image_url": ai_generated_image_url}
+        if response.status_code == 200:
+            ai_generated_image_url = response.json().get("processed_image_url")
+            print(f"🎨 AI Processed Image URL: {ai_generated_image_url}")
+
+            # ✅ **Send processed image URL via MQTT**
+            send_mqtt_message(ai_generated_image_url)
+
+            return {"status": "Processing Completed", "image_url": ai_generated_image_url}
+        else:
+            print(f"❌ AI processing failed: {response.text}")
+            raise HTTPException(status_code=500, detail="AI processing failed")
+
+    except Exception as e:
+        print(f"❌ Error processing image: {e}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
 
 if __name__ == "__main__":
     import uvicorn
