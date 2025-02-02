@@ -1,34 +1,39 @@
 # Core Python Libraries
-numpy>=1.21.0
-pandas>=1.3.0
+numpy
+pandas
 
 # Camera & Image Processing
-picamera2  # Raspberry Pi camera library
-opencv-python-headless>=4.5.1  # Headless version (for Raspberry Pi)
+opencv-python-headless  # Headless version for Raspberry Pi
+picamera2
 
-# UI Framework (Ensure PyQt5 works on Raspberry Pi, otherwise use tkinter)
-PyQt5>=5.15.4
+# UI Framework
+PyQt5
 
-# Object Detection (YOLOv5)
-torch>=1.10.0
-torchvision>=0.11.0
-ultralytics  # YOLOv5 model handling
+# Object Detection (YOLO)
+torch
+torchvision
+ultralytics  # YOLOv5 model loading
 
 # Firebase Integration
-firebase-admin>=5.2.0  # Firebase SDK for Python
+firebase-admin
 
 # MQTT for AI Communication
-paho-mqtt>=1.6.1
+paho-mqtt
 
 # Web Requests (AI API)
-requests>=2.26.0  # Sending HTTP requests
+requests
 
 # Displaying Images on LED Screen
-pygame>=2.0.1  # Display AI-generated images
+pygame
 
 # Utilities
-pillow>=8.4.0  # Image processing
-json5>=0.9.6  # JSON parsing with comments support
+pillow  # Image processing
+json5   # JSON parsing with comments support
+logging
 
-# System Monitoring (Optional)
-psutil>=5.8.0  # Monitor CPU, RAM, etc.
+# System Monitoring (if needed)
+psutil
+
+tqdm  # Progress bar for terminal
+fastapi  # AI server
+uvicorn  # ASGI server for FastAPI
