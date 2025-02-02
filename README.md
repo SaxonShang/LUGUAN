@@ -1,4 +1,4 @@
-# AI Smart Detection & Capture System
+# AI Smart Displayer
 
 ## Overview
 This project is a **smart AI-based detection and capture system** that integrates **YOLO object detection, Firebase for image storage, FastAPI for AI processing, and MQTT for real-time image delivery**. The system is designed to detect objects, capture images, process them using AI, and display the processed images on a Raspberry Pi-connected LED screen.
