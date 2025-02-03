@@ -1,4 +1,5 @@
 import torch
+import cv2
 from pathlib import Path
 
 class YOLO:
@@ -48,9 +49,54 @@ class YOLO:
             print(f"❌ YOLO detection failed: {e}")
             return []
 
+    def detect_from_camera(self, target_object):
+        """
+        Continuously captures frames from the camera, detects objects, 
+        and returns True if the target_object is found.
+
+        Args:
+            target_object (str): The object to detect.
+
+        Returns:
+            bool: True if the object is detected, False otherwise.
+        """
+        cap = cv2.VideoCapture(0)  # Open camera (use 0 for default camera)
+        if not cap.isOpened():
+            print("❌ Error: Cannot open camera")
+            return False
+
+        try:
+            while True:
+                ret, frame = cap.read()
+                if not ret:
+                    print("❌ Failed to capture frame")
+                    continue
+
+                # Convert frame to image file for YOLO detection
+                temp_image_path = "temp_frame.jpg"
+                cv2.imwrite(temp_image_path, frame)
+
+                detected_classes = self.detect_objects(temp_image_path)
+                if target_object in detected_classes:
+                    print(f"🎯 Target object '{target_object}' detected!")
+                    return True  # Stop detection when object is found
+
+        except KeyboardInterrupt:
+            print("🛑 Stopping camera detection...")
+        finally:
+            cap.release()
+
+        return False
+
 # ✅ Example Usage (for Testing)
 if __name__ == "__main__":
     yolo = YOLO()
+    
+    # Test 1: Detect objects from an image
     test_image = "test.jpg"  # Replace with a valid image path
     objects = yolo.detect_objects(test_image)
     print("🖼️ Detected Objects:", objects)
+
+    # Test 2: Real-time object detection from camera
+    detected = yolo.detect_from_camera("person")  # Replace "person" with any target class
+    print(f"📸 Object Detected: {detected}")
