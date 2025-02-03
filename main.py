@@ -1,72 +1,68 @@
 import json
 import time
+import requests
 import paho.mqtt.client as mqtt
-from app.camera import Camera
 from app.firebase_client import upload_to_firebase
-from app.yolo_model import YOLO
-from app.temp_sensor import get_temperature, get_humidity
+from app.http_client import send_metadata_to_ai
+from app.display import display_image
+from config import mqtt_config
 
-# 读取 MQTT 配置
-with open("config/mqtt_config.json", "r") as file:
-    mqtt_config = json.load(file)
+# === Raspberry Pi Camera Stream (MJPEG Streamer) ===
+RASPBERRY_PI_IP = "192.168.1.100"  # Update with your Pi's IP
+MJPEG_STREAM_URL = f"http://{RASPBERRY_PI_IP}:8080/?action=snapshot"
 
-MQTT_BROKER = mqtt_config["broker"]
-MQTT_PORT = mqtt_config["port"]
-CAPTURE_TOPIC = "ui/capture_command"
-RESULT_TOPIC = "ui/captured_image"
+# === MQTT Client Setup ===
+mqtt_client = mqtt.Client()
 
-# 初始化对象
-camera = Camera()
-yolo = YOLO()
+def on_ai_response(client, userdata, message):
+    """Handles AI-processed image URL received from MQTT."""
+    try:
+        data = json.loads(message.payload.decode())
+        image_url = data.get("image_url")
+        print(f"🎨 AI-Processed Image Received: {image_url}")
 
-# 全局变量，存储当前目标物体
-target_object = None
+        # Display processed image on LED Screen
+        display_image(image_url)
 
-def on_message(client, userdata, message):
-    """收到 MQTT 消息后，更新目标物体"""
-    global target_object
-    data = json.loads(message.payload.decode())
-    target_object = data.get("selected_object")
-    print(f"📡 收到 UI 选择的目标物体: {target_object}")
-
-# 连接 MQTT 服务器
-client = mqtt.Client()
-client.on_message = on_message
-client.connect(MQTT_BROKER, MQTT_PORT, 60)
-client.subscribe(CAPTURE_TOPIC)
-client.loop_start()
+    except Exception as e:
+        print(f"❌ Error processing AI response: {e}")
 
 def main():
-    global target_object
-    print("🚀 Raspberry Pi 目标检测启动...")
+    """Main function for handling object detection, image capturing, and AI processing."""
+    print("🚀 Starting Raspberry Pi Application...")
+    
+    mqtt_client.on_message = on_ai_response
+    mqtt_client.connect(mqtt_config["broker"], mqtt_config["port"], 60)
+    mqtt_client.subscribe("ai/processed_image")
+    mqtt_client.loop_start()
 
     while True:
-        if target_object:  # 仅当用户选择了目标物体时检测
-            detected = yolo.detect_from_camera(target_object)
-            if detected:
-                print(f"✅ 检测到目标物体 {target_object}，拍照并上传...")
-                
-                # 拍照并上传 Firebase
-                image_path = "captured_image.jpg"
-                camera.capture_image(image_path)
-                image_url = upload_to_firebase(image_path, target_object)
+        print("📸 Capturing Image from Pi Camera...")
+        image_path = "captured_image.jpg"
+        response = requests.get(MJPEG_STREAM_URL, stream=True)
 
-                # 获取温湿度
+        if response.status_code == 200:
+            with open(image_path, "wb") as f:
+                f.write(response.content)
+
+            print("🔍 Uploading image to Firebase...")
+            image_url = upload_to_firebase(image_path, "auto-detection")
+
+            if image_url:
                 metadata = {
-                    "temperature": get_temperature(),
-                    "humidity": get_humidity(),
-                    "object": target_object,
-                    "image_url": image_url
+                    "image_url": image_url,
+                    "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
                 }
 
-                # 发送 MQTT 消息给 UI
-                client.publish(RESULT_TOPIC, json.dumps(metadata))
-                print(f"📡 发送照片 URL 到 UI: {image_url}")
+                print("📡 Sending metadata to AI for processing...")
+                send_metadata_to_ai(metadata)
 
-                # 清空目标物体，等待用户新选择
-                target_object = None
+                mqtt_client.publish("ui/captured_image", json.dumps(metadata))
+        
+        else:
+            print("❌ Error: Failed to retrieve image from Pi Camera")
 
-            time.sleep(2)  # 避免频繁拍照
+        time.sleep(5)  # Adjust detection interval
 
 if __name__ == "__main__":
     main()

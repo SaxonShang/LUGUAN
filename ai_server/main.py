@@ -17,33 +17,35 @@ MQTT_BROKER = mqtt_config["broker"]
 MQTT_PORT = mqtt_config["port"]
 MQTT_TOPIC = "ai/processed_image"
 
+mqtt_client = mqtt.Client()
+mqtt_client.connect(MQTT_BROKER, MQTT_PORT, 60)
+
 def send_mqtt_message(image_url):
-    """Sends AI-generated image URL via MQTT to Raspberry Pi."""
+    """✅ Sends AI-generated image URL via MQTT to Raspberry Pi."""
     try:
-        client = mqtt.Client()
-        client.connect(MQTT_BROKER, MQTT_PORT, 60)
         payload = json.dumps({"image_url": image_url})
-        client.publish(MQTT_TOPIC, payload)
-        client.disconnect()
+        mqtt_client.publish(MQTT_TOPIC, payload)
         print(f"✅ AI-generated image sent via MQTT: {image_url}")
     except Exception as e:
         print(f"❌ Error sending MQTT message: {e}")
 
 @app.post("/process_image")
 async def process_image(data: dict):
-    """Receives metadata from Raspberry Pi, fetches the image from Firebase, and sends it for AI processing."""
+    """✅ Receives metadata from UI, fetches image from Firebase, and sends it for AI processing."""
     try:
         object_detected = data.get("object")
         user_text = data.get("text")
         temperature = data.get("temperature")
         humidity = data.get("humidity")
 
-        # ✅ **Fetch the latest image URL from Firebase**
-        blob = bucket.blob(f"captured_images/{object_detected}.jpg")
-        if not blob.exists():
+        # ✅ **Check if the image exists in Firebase**
+        blobs = list(bucket.list_blobs(prefix=f"captured_images/{object_detected}"))
+        if not blobs:
             raise HTTPException(status_code=404, detail=f"❌ Image not found for {object_detected}")
 
-        image_url = f"https://{ai_config['firebase_bucket']}/captured_images/{object_detected}.jpg"
+        blob = blobs[-1]  # Get the latest image for this object
+        image_url = blob.generate_signed_url(expiration=300)  # Generate temporary download link
+
         print(f"🖼️ Found image: {image_url}")
 
         # ✅ **Send Image & Metadata to AI Processing API**

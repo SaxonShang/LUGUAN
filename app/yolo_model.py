@@ -1,14 +1,12 @@
 import torch
 import cv2
+import numpy as np
 from pathlib import Path
 
 class YOLO:
     def __init__(self, model_path="models/yolov5s.pt"):
         """
         Initializes YOLOv5 model.
-
-        Args:
-            model_path (str): Path to the YOLOv5 model (.pt file).
         """
         self.device = "cuda" if torch.cuda.is_available() else "cpu"  # ✅ Auto-select GPU or CPU
         self.model = self.load_model(model_path)
@@ -16,7 +14,8 @@ class YOLO:
     def load_model(self, model_path):
         """Loads the YOLOv5 model from a given path."""
         if not Path(model_path).exists():
-            raise FileNotFoundError(f"❌ Model file not found: {model_path}")
+            print(f"⚠️ Custom model not found. Loading default YOLOv5s model...")
+            model_path = "yolov5s.pt"  # Download from Ultralytics if not found
 
         try:
             model = torch.hub.load("ultralytics/yolov5", "custom", path=model_path, force_reload=False)
@@ -28,13 +27,10 @@ class YOLO:
 
     def detect_objects(self, image_path):
         """
-        Runs object detection on an image and returns detected classes.
-
-        Args:
-            image_path (str): Path to the image file.
+        Runs object detection on an image and returns detected objects with bounding box coordinates.
 
         Returns:
-            List[str]: List of detected object class names.
+            List[dict]: Detected objects with bounding boxes.
         """
         if not Path(image_path).exists():
             print(f"❌ Error: Image not found at {image_path}")
@@ -42,9 +38,22 @@ class YOLO:
 
         try:
             results = self.model(image_path)
-            detected_classes = results.pandas().xyxy[0]["name"].tolist()
-            print(f"✅ Detected objects: {detected_classes}")
-            return detected_classes
+            detections = results.pandas().xyxy[0]  # Convert to Pandas DataFrame
+            detected_objects = []
+
+            for _, row in detections.iterrows():
+                detected_objects.append({
+                    "name": row["name"],
+                    "xmin": int(row["xmin"]),
+                    "ymin": int(row["ymin"]),
+                    "xmax": int(row["xmax"]),
+                    "ymax": int(row["ymax"]),
+                    "confidence": float(row["confidence"])
+                })
+
+            print(f"✅ Detected objects: {detected_objects}")
+            return detected_objects  # Return list of dictionaries
+
         except Exception as e:
             print(f"❌ YOLO detection failed: {e}")
             return []
@@ -60,7 +69,7 @@ class YOLO:
         Returns:
             bool: True if the object is detected, False otherwise.
         """
-        cap = cv2.VideoCapture(0)  # Open camera (use 0 for default camera)
+        cap = cv2.VideoCapture(0)  # Open laptop camera
         if not cap.isOpened():
             print("❌ Error: Cannot open camera")
             return False
@@ -76,10 +85,12 @@ class YOLO:
                 temp_image_path = "temp_frame.jpg"
                 cv2.imwrite(temp_image_path, frame)
 
-                detected_classes = self.detect_objects(temp_image_path)
-                if target_object in detected_classes:
-                    print(f"🎯 Target object '{target_object}' detected!")
-                    return True  # Stop detection when object is found
+                detected_objects = self.detect_objects(temp_image_path)
+                for obj in detected_objects:
+                    if obj["name"] == target_object:
+                        print(f"🎯 Target object '{target_object}' detected!")
+                        cap.release()
+                        return True  # Stop detection when object is found
 
         except KeyboardInterrupt:
             print("🛑 Stopping camera detection...")
@@ -87,6 +98,34 @@ class YOLO:
             cap.release()
 
         return False
+
+    def detect_objects_in_frame(self, frame, target_object=None):
+        """
+        Detect objects in a given frame and return bounding box details.
+
+        Args:
+            frame (numpy.ndarray): The frame/image for detection.
+            target_object (str, optional): If specified, only show bounding boxes for this object.
+
+        Returns:
+            numpy.ndarray: The frame with bounding boxes drawn (if applicable).
+        """
+        temp_image_path = "temp_frame.jpg"
+        cv2.imwrite(temp_image_path, frame)
+        detections = self.detect_objects(temp_image_path)
+
+        if isinstance(detections, list):
+            for obj in detections:
+                if target_object is None or obj["name"] == target_object:
+                    x1, y1, x2, y2 = obj["xmin"], obj["ymin"], obj["xmax"], obj["ymax"]
+                    confidence = obj["confidence"]
+
+                    # Draw bounding box on the frame
+                    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                    cv2.putText(frame, f"{obj['name']} {confidence:.2f}",
+                                (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+
+        return frame  # Return frame with bounding box
 
 # ✅ Example Usage (for Testing)
 if __name__ == "__main__":
