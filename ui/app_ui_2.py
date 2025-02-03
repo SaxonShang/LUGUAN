@@ -1,22 +1,22 @@
 import sys
 import os
-import json
 import cv2
+import json
 import requests
 import firebase_admin
 from firebase_admin import credentials, storage, db
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout,
-    QPushButton, QTextEdit, QGroupBox, QFormLayout, QComboBox
+    QPushButton, QTextEdit, QComboBox, QSizePolicy
 )
 from PyQt5.QtGui import QPixmap, QImage
 
-# MJPEG Streamer URL (树莓派摄像头流)
-RASPBERRY_PI_IP = "192.168.1.100"  # 请修改为你的树莓派IP
-MJPEG_STREAM_URL = f"http://{RASPBERRY_PI_IP}:8080/?action=stream"
+# === Raspberry Pi Camera Stream (MJPEG Streamer) ===
+RASPBERRY_PI_IP = "192.168.1.100"  # Update with your Pi's IP
+MJPEG_STREAM_URL = f"http://{RASPBERRY_PI_IP}:8080/?action=snapshot"
 
-# Firebase 配置
+# === Firebase Setup ===
 cred = credentials.Certificate("config/firebase_config.json")
 firebase_admin.initialize_app(cred, {
     "databaseURL": "https://your-firebase-database.firebaseio.com/",
@@ -25,115 +25,175 @@ firebase_admin.initialize_app(cred, {
 bucket = storage.bucket()
 firebase_ref = db.reference("sensor_data")
 
+# === YOLO Model Integration for Object Detection ===
+from app.yolo_model import YOLO
+yolo = YOLO(model_path="models/yolov5s.pt")
+
+
+# === Custom Video Container Widget ===
+class VideoContainerWidget(QWidget):
+    def __init__(self, video_aspect=4 / 3, parent=None):
+        super().__init__(parent)
+        self.video_aspect = video_aspect
+        self.video_label = QLabel("Camera Feed", self)
+        self.captured_image_label = QLabel("Captured Image", self)
+        self.video_label.setStyleSheet("background-color: black;")
+        self.captured_image_label.setStyleSheet("background-color: black;")
+        self.video_label.setAlignment(Qt.AlignCenter)
+        self.captured_image_label.setAlignment(Qt.AlignCenter)
+
+    def resizeEvent(self, event):
+        total_width = self.width()
+        total_height = self.height()
+        available_width_per = total_width / 2
+        desired_height = available_width_per / self.video_aspect
+
+        if desired_height > total_height:
+            new_height = total_height
+            new_width = new_height * self.video_aspect
+        else:
+            new_width = available_width_per
+            new_height = desired_height
+
+        x1 = (available_width_per - new_width) / 2
+        y1 = (total_height - new_height) / 2
+        self.video_label.setGeometry(int(x1), int(y1), int(new_width), int(new_height))
+        x2 = total_width / 2 + (available_width_per - new_width) / 2
+        self.captured_image_label.setGeometry(int(x2), int(y1), int(new_width), int(new_height))
+        super().resizeEvent(event)
+
+
+# === Main Application ===
 class CameraApp(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("AI Smart Detection & Capture")
-        self.setGeometry(100, 100, 1200, 800)
+        self.resize(1200, 800)
         self.init_ui()
 
     def init_ui(self):
-        """初始化 UI 界面"""
+        """Initialize the UI layout."""
         main_layout = QVBoxLayout()
+        main_layout.setContentsMargins(0, 0, 0, 0)
 
-        # 按钮 & 物体选择框
-        control_layout = QHBoxLayout()
+        # === Top Row: Left Control Panel & Right Info Panel ===
+        top_row = QHBoxLayout()
+        top_row.setContentsMargins(10, 10, 10, 10)
 
+        # --- Left Control Panel ---
+        left_controls = QVBoxLayout()
         self.object_select = QComboBox()
-        self.object_select.addItems(["Person", "Tie", "Car", "Dog"])  # 选择检测物体
-        control_layout.addWidget(self.object_select)
+        self.object_select.addItems(["Person", "Tie", "Car", "Dog"])
+        self.object_select.setFixedHeight(50)
+        left_controls.addWidget(self.object_select)
+
+        button_style = """
+            QPushButton {
+                background-color: #3498db;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                padding: 10px;
+            }
+            QPushButton:hover {
+                background-color: #2980b9;
+            }
+            QPushButton:pressed {
+                background-color: #1c5980;
+                margin-top: 4px;
+            }
+        """
 
         self.detect_button = QPushButton("Detect")
+        self.detect_button.setFixedHeight(50)
+        self.detect_button.setStyleSheet(button_style)
         self.detect_button.clicked.connect(self.detect_environment)
-        control_layout.addWidget(self.detect_button)
+        left_controls.addWidget(self.detect_button)
 
         self.capture_button = QPushButton("Capture")
+        self.capture_button.setFixedHeight(50)
+        self.capture_button.setStyleSheet(button_style)
         self.capture_button.clicked.connect(self.capture_image)
-        control_layout.addWidget(self.capture_button)
+        left_controls.addWidget(self.capture_button)
 
         self.exit_button = QPushButton("Exit")
+        self.exit_button.setFixedHeight(50)
+        self.exit_button.setStyleSheet(button_style)
         self.exit_button.clicked.connect(self.close)
-        control_layout.addWidget(self.exit_button)
+        left_controls.addWidget(self.exit_button)
 
-        main_layout.addLayout(control_layout)
-
-        # 文本输入框（支持换行）
-        self.text_input = QTextEdit()
-        self.text_input.setPlaceholderText("Type your message here...")
-        self.text_input.setFixedHeight(80)
-        main_layout.addWidget(self.text_input)
-
-        # 温湿度显示
+        # --- Right Info Panel ---
+        right_info = QVBoxLayout()
         self.env_label = QLabel("Temperature: --°C  |  Humidity: --%")
         self.env_label.setAlignment(Qt.AlignCenter)
-        self.env_label.setStyleSheet("font-size: 16px; font-weight: bold;")
-        main_layout.addWidget(self.env_label)
+        self.env_label.setFixedHeight(50)
+        self.env_label.setStyleSheet("font-size: 20px; font-weight: bold;")
+        right_info.addWidget(self.env_label)
 
-        # 视频流 & 拍摄图片
-        video_capture_layout = QHBoxLayout()
+        self.text_input = QTextEdit()
+        self.text_input.setPlaceholderText("Type your message here...")
+        self.text_input.setFixedHeight(150)
+        right_info.addWidget(self.text_input)
 
-        self.video_label = QLabel("Camera Feed")
-        self.video_label.setAlignment(Qt.AlignCenter)
-        self.video_label.setFixedSize(640, 480)
-        video_capture_layout.addWidget(self.video_label)
+        top_row.addLayout(left_controls)
+        top_row.addLayout(right_info)
+        main_layout.addLayout(top_row, 0)
 
-        self.captured_image_label = QLabel("Captured Image")
-        self.captured_image_label.setAlignment(Qt.AlignCenter)
-        self.captured_image_label.setFixedSize(640, 480)
-        video_capture_layout.addWidget(self.captured_image_label)
+        # === Bottom Row: Camera Feed & Captured Image ===
+        self.video_container = VideoContainerWidget(video_aspect=4 / 3)
+        self.video_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        main_layout.addWidget(self.video_container, 1)
 
-        main_layout.addLayout(video_capture_layout)
         self.setLayout(main_layout)
 
-        # 加载实时视频流
-        self.load_camera_stream()
-
-    def load_camera_stream(self):
-        """加载 Raspberry Pi 的 MJPEG Streamer 视频流"""
-        pixmap = QPixmap()
-        pixmap.loadFromData(requests.get(MJPEG_STREAM_URL, stream=True).content)
-        self.video_label.setPixmap(pixmap)
-
     def detect_environment(self):
-        """检测环境温湿度，并上传至 Firebase"""
-        temperature = 25.0  # 模拟数据
-        humidity = 60.0
+        """Detect temperature, humidity, and trigger AI model for object detection."""
+        from app.temp_sensor import get_temperature, get_humidity
+
+        temperature = get_temperature()
+        humidity = get_humidity()
         self.env_label.setText(f"Temperature: {temperature}°C  |  Humidity: {humidity}%")
 
-        data = {
-            "temperature": temperature,
-            "humidity": humidity,
-            "timestamp": "2025-02-03 12:00:00"
-        }
-        firebase_ref.push(data)
-
-    def capture_image(self):
-        """拍摄照片，展示到 UI 并上传 Firebase"""
-        selected_object = self.object_select.currentText().lower()
-        image_path = f"{selected_object}.jpg"
-
-        # 获取摄像头流并保存
+        # Automatically capture if the object is detected
+        image_path = "captured_image.jpg"
         response = requests.get(MJPEG_STREAM_URL, stream=True)
         with open(image_path, "wb") as f:
-            for chunk in response.iter_content(chunk_size=1024):
-                if chunk:
-                    f.write(chunk)
+            f.write(response.content)
 
-        # 显示拍摄图片
+        detected_objects = yolo.detect_objects(image_path)
+        if self.object_select.currentText().lower() in detected_objects:
+            self.capture_image()
+
+    def capture_image(self):
+        """Capture an image from Pi Camera, display it, and upload to Firebase."""
+        selected_object = self.object_select.currentText().lower()
+        image_path = "captured_image.jpg"
+
+        response = requests.get(MJPEG_STREAM_URL, stream=True)
+        with open(image_path, "wb") as f:
+            f.write(response.content)
+
         pixmap = QPixmap(image_path)
-        self.captured_image_label.setPixmap(pixmap)
+        target_size = self.video_container.captured_image_label.size()
+        pixmap = pixmap.scaled(target_size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        self.video_container.captured_image_label.setPixmap(pixmap)
 
-        # 上传到 Firebase Storage
+        # Upload to Firebase
         blob = bucket.blob(f"captured_images/{selected_object}.jpg")
         blob.upload_from_filename(image_path)
+
+        metadata = {
+            "temperature": self.env_label.text(),
+            "object": selected_object,
+            "text": self.text_input.toPlainText()
+        }
+        firebase_ref.push(metadata)
         os.remove(image_path)
 
-        # 清空类别选择
-        self.object_select.setCurrentIndex(0)
-
     def closeEvent(self, event):
-        """退出程序"""
+        """Exit application."""
         event.accept()
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
