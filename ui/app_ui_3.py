@@ -56,7 +56,7 @@ class VideoStreamThread(QThread):
                 self.frame_update.emit(qt_image)
 
                 detected_objects = yolo.detect_objects("temp_frame.jpg")
-                if any(obj["name"] == self.selected_object for obj in detected_objects):
+                if self.selected_object in detected_objects:
                     self.object_detected.emit()
 
     def stop(self):
@@ -81,18 +81,17 @@ class CameraApp(QWidget):
         main_layout = QVBoxLayout()
         main_layout.setContentsMargins(0, 0, 0, 0)
 
-        # === Top Section (Buttons & Info) ===
+        # === Top Section: Button Controls and Info Panel ===
         top_row = QHBoxLayout()
-        left_controls = QVBoxLayout()
 
-        # Object Selection
+        # Left Controls (Buttons)
+        left_controls = QVBoxLayout()
         self.object_select = QComboBox()
         self.object_select.addItems(["Person", "Tie", "Car", "Dog"])
         self.object_select.setFixedHeight(50)
         self.object_select.currentIndexChanged.connect(self.update_selected_object)
         left_controls.addWidget(self.object_select)
 
-        # History Selection
         self.history_select = QComboBox()
         self.history_select.addItem("Select History")
         self.history_select.setFixedHeight(50)
@@ -137,29 +136,37 @@ class CameraApp(QWidget):
 
         # Right Info Panel
         right_info = QVBoxLayout()
-        self.env_label = QLabel("Temperature: --°C  |  Humidity: --%")
+        # Temperature & Humidity Label (Reduced height to match one button: 50px)
+        self.env_label = QLabel("Temperature: 25°C  |  Humidity: 60%")
         self.env_label.setAlignment(Qt.AlignCenter)
         self.env_label.setFixedHeight(50)
         self.env_label.setStyleSheet("font-size: 20px; font-weight: bold;")
         right_info.addWidget(self.env_label)
-
+        # Text Input (Increased height so total right panel height equals 200px)
         self.text_input = QTextEdit()
         self.text_input.setPlaceholderText("Type your message here...")
-        self.text_input.setFixedHeight(100)
+        self.text_input.setFixedHeight(150)
         right_info.addWidget(self.text_input)
 
         top_row.addLayout(left_controls)
         top_row.addLayout(right_info)
         main_layout.addLayout(top_row)
 
-        # === Video Feed & Captured Image ===
+        # === Bottom Section: Video Feed & Captured Image Side by Side ===
         video_capture_layout = QHBoxLayout()
+
         self.video_label = QLabel("Camera Feed")
         self.video_label.setAlignment(Qt.AlignCenter)
+        self.video_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.video_label.setMinimumSize(1, 1)
+        self.video_label.setScaledContents(True)  # Auto-resize the pixmap
         video_capture_layout.addWidget(self.video_label)
 
         self.captured_image_label = QLabel("Captured Image")
         self.captured_image_label.setAlignment(Qt.AlignCenter)
+        self.captured_image_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.captured_image_label.setMinimumSize(1, 1)
+        self.captured_image_label.setScaledContents(True)  # Auto-resize the pixmap
         video_capture_layout.addWidget(self.captured_image_label)
 
         main_layout.addLayout(video_capture_layout)
@@ -176,31 +183,22 @@ class CameraApp(QWidget):
         self.video_label.setPixmap(QPixmap.fromImage(qt_image))
 
     def capture_image(self):
-        """Captures the detected frame, displays, and uploads to Firebase."""
+        """Captures the detected frame, displays it, and uploads it to Firebase."""
         response = requests.get(MJPEG_STREAM_URL, stream=True)
         if response.status_code == 200:
-            image_path = f"captured_{self.selected_object}.jpg"
+            image_path = f"{self.selected_object}.jpg"
             with open(image_path, "wb") as f:
                 f.write(response.content)
 
             pixmap = QPixmap(image_path)
             self.captured_image_label.setPixmap(pixmap)
 
-            blob = bucket.blob(f"{self.selected_object}/{os.path.basename(image_path)}")
+            blob = bucket.blob(f"captured_images/{self.selected_object}/{os.path.basename(image_path)}")
             blob.upload_from_filename(image_path)
             os.remove(image_path)
 
-    def load_history(self):
-        """Fetches history of selected object from Firebase."""
-        self.history_select.clear()
-        self.history_select.addItem("Select History")
-        category_ref = firebase_ref.child(self.selected_object).get()
-        if category_ref:
-            for image_key, image_data in category_ref.items():
-                self.history_select.addItem(image_data["image_url"])
-
     def process_image(self):
-        """Sends the captured image, text, and environment data to AI."""
+        """Sends the captured image, text, and environment data to AI processing."""
         data = {
             "text": self.text_input.toPlainText(),
             "temperature": self.env_label.text(),
@@ -209,9 +207,13 @@ class CameraApp(QWidget):
         requests.post("http://your-ai-server.com/process", json=data)
 
     def clear_database_and_exit(self):
-        """Clears Firebase data and exits application."""
+        """Clears Firebase data and exits the application."""
         firebase_ref.set({})
         sys.exit()
+
+    def load_history(self):
+        """Placeholder for loading history (if applicable)."""
+        pass
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

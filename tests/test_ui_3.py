@@ -2,7 +2,8 @@ import sys
 import os
 import cv2
 import json
-import random
+import requests
+import numpy as np
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout,
@@ -10,85 +11,92 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtGui import QPixmap, QImage
 
-# Import YOLO Model
+# === Import Updated YOLO Model ===
 from yolo_model import YOLO
-
-# Initialize YOLO
 yolo = YOLO(model_path="models/yolov5s.pt")
 
+# === Test Mode: Using Laptop Camera ===
+TEST_MODE = True
+
+# === Video Processing Thread ===
 class VideoStreamThread(QThread):
-    """
-    Thread to continuously capture video frames and run YOLO detection.
-    Emits frames with bounding boxes only for the selected object.
-    """
     frame_update = pyqtSignal(QImage)
-    object_detected = pyqtSignal()  # Signal to trigger image capture
+    object_detected = pyqtSignal(np.ndarray)  # Emits frame when the selected object is detected
 
     def __init__(self, selected_object):
         super().__init__()
         self.selected_object = selected_object
         self.running = True
-        self.cap = cv2.VideoCapture(0)  # Use laptop camera
+        self.cap = cv2.VideoCapture(0)  # Open laptop camera
 
     def run(self):
+        if not self.cap.isOpened():
+            print("❌ Error: Cannot open laptop camera!")
+            return
+
         while self.running:
             ret, frame = self.cap.read()
             if not ret:
+                print("❌ Failed to capture frame")
                 continue
 
-            # Detect objects in the frame
-            processed_frame = yolo.detect_objects_in_frame(frame, self.selected_object)
+            # Process frame for bounding boxes (ONLY in video)
+            processed_frame = yolo.detect_objects_in_frame(frame.copy(), self.selected_object)
 
-            # Convert frame to QImage for PyQt display
+            # Convert frame to QImage for display
             rgb_image = cv2.cvtColor(processed_frame, cv2.COLOR_BGR2RGB)
             h, w, ch = rgb_image.shape
             bytes_per_line = ch * w
             qt_image = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format_RGB888)
             self.frame_update.emit(qt_image)
 
-            # Check if the selected object is detected and capture image
-            detected_objects = yolo.detect_objects("temp_frame.jpg")
-            if any(obj["name"] == self.selected_object for obj in detected_objects):
-                self.object_detected.emit()  # Signal main UI to capture
+            # Check if the selected object is detected → Emit raw frame for capture
+            detected_objects = yolo.detect_objects(frame)
+            if any(obj["name"].lower() == self.selected_object.lower() for obj in detected_objects):
+                self.object_detected.emit(frame)
 
     def stop(self):
-        """Stops the video stream."""
         self.running = False
         self.cap.release()
 
+# === Main UI Application ===
 class CameraApp(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("AI Smart Detection & Capture - Test Version")
+        self.setWindowTitle("AI Smart Displayer - Test Version")
         self.resize(1200, 800)
+        self.video_aspect_set = False  # Flag to record whether the actual camera aspect ratio has been set
         self.init_ui()
 
-        # Default selected object
-        self.selected_object = "person"
-        
         # Start Video Stream
+        self.selected_object = "person"
         self.video_thread = VideoStreamThread(self.selected_object)
         self.video_thread.frame_update.connect(self.update_video_feed)
         self.video_thread.object_detected.connect(self.capture_image)
         self.video_thread.start()
 
     def init_ui(self):
-        """Initialize UI layout with resizable elements."""
+        """Initialize UI layout and components."""
         main_layout = QVBoxLayout()
         main_layout.setContentsMargins(0, 0, 0, 0)
 
-        # === Top Section (Buttons & Info) ===
+        # === Top Section: Button Controls and Info ===
         top_row = QHBoxLayout()
         left_controls = QVBoxLayout()
 
-        # Object Selection
+        # Object Selection Dropdown
         self.object_select = QComboBox()
         self.object_select.addItems(["Person", "Tie", "Car", "Dog"])
         self.object_select.setFixedHeight(50)
         self.object_select.currentIndexChanged.connect(self.update_selected_object)
         left_controls.addWidget(self.object_select)
 
-        # Buttons
+        # History Selection Dropdown
+        self.history_select = QComboBox()
+        self.history_select.addItem("Select History")
+        self.history_select.setFixedHeight(50)
+        left_controls.addWidget(self.history_select)
+
         button_style = """
             QPushButton {
                 background-color: #3498db;
@@ -96,7 +104,7 @@ class CameraApp(QWidget):
                 border: none;
                 border-radius: 5px;
                 padding: 10px;
-                font-size: 16px;
+                font-size: 20px;
             }
             QPushButton:hover {
                 background-color: #2980b9;
@@ -107,80 +115,102 @@ class CameraApp(QWidget):
             }
         """
 
-        self.capture_button = QPushButton("Manual Capture")
+        # Capture Button
+        self.capture_button = QPushButton("Capture")
         self.capture_button.setFixedHeight(50)
         self.capture_button.setStyleSheet(button_style)
-        self.capture_button.clicked.connect(self.capture_image)
+        self.capture_button.clicked.connect(self.manual_capture)
         left_controls.addWidget(self.capture_button)
 
+        # Process Button
+        self.process_button = QPushButton("Process Image")
+        self.process_button.setFixedHeight(50)
+        self.process_button.setStyleSheet(button_style)
+        self.process_button.clicked.connect(self.process_image)
+        left_controls.addWidget(self.process_button)
+
+        # Exit Button
         self.exit_button = QPushButton("Exit")
         self.exit_button.setFixedHeight(50)
         self.exit_button.setStyleSheet(button_style)
-        self.exit_button.clicked.connect(self.close)
+        self.exit_button.clicked.connect(self.close_application)
         left_controls.addWidget(self.exit_button)
 
-        # Right Info Panel
+        # === Right Section: Info Panel ===
         right_info = QVBoxLayout()
+        # Reduce the temperature and humidity display height to one button height (50px)
         self.env_label = QLabel("Temperature: --°C  |  Humidity: --%")
         self.env_label.setAlignment(Qt.AlignCenter)
-        self.env_label.setFixedHeight(50)
-        self.env_label.setStyleSheet("font-size: 20px; font-weight: bold;")
+        self.env_label.setFixedHeight(50)  # Same as a single button height
+        self.env_label.setStyleSheet("font-size: 20px; font-weight: bold; background-color: rgba(255,255,255,0.7);")
         right_info.addWidget(self.env_label)
 
+        # Increase the text input height so that the total right panel height matches the button section (200px)
         self.text_input = QTextEdit()
         self.text_input.setPlaceholderText("Type your message here...")
-        self.text_input.setFixedHeight(100)
+        self.text_input.setFixedHeight(150)  # Now 50 (env_label) + 150 (text_input) = 200 total
         right_info.addWidget(self.text_input)
 
         top_row.addLayout(left_controls)
         top_row.addLayout(right_info)
         main_layout.addLayout(top_row)
 
-        # === Video Feed & Captured Image ===
+        # === Bottom Section: Video and Captured Image Side by Side ===
         video_capture_layout = QHBoxLayout()
+
         self.video_label = QLabel("Camera Feed")
         self.video_label.setAlignment(Qt.AlignCenter)
-        self.video_label.setStyleSheet("border: 2px solid blue; font-size: 16px;")
+        self.video_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.video_label.setMinimumSize(1, 1)
+        self.video_label.setScaledContents(True)  # Enables auto-resizing of the pixmap
         video_capture_layout.addWidget(self.video_label)
 
         self.captured_image_label = QLabel("Captured Image")
         self.captured_image_label.setAlignment(Qt.AlignCenter)
-        self.captured_image_label.setStyleSheet("border: 2px solid green; font-size: 16px;")
+        self.captured_image_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.captured_image_label.setMinimumSize(1, 1)
+        self.captured_image_label.setScaledContents(True)  # Enables auto-resizing of the pixmap
         video_capture_layout.addWidget(self.captured_image_label)
 
         main_layout.addLayout(video_capture_layout)
         self.setLayout(main_layout)
 
     def update_selected_object(self):
-        """Updates the selected object for detection."""
+        """Update selected object and restart detection thread."""
         self.selected_object = self.object_select.currentText().lower()
         self.video_thread.selected_object = self.selected_object
-        print(f"🔍 Now detecting: {self.selected_object}")
 
     def update_video_feed(self, qt_image):
-        """Updates the video feed label with YOLO detection output."""
+        """Update video feed display."""
         self.video_label.setPixmap(QPixmap.fromImage(qt_image))
 
-    def capture_image(self):
-        """Captures the current frame when the selected object is detected."""
+    def capture_image(self, frame):
+        """Capture and display image when object is detected."""
+        image_path = f"captured_{self.selected_object}.jpg"
+        cv2.imwrite(image_path, frame)
+        pixmap = QPixmap(image_path)
+        self.captured_image_label.setPixmap(pixmap)
+
+    def manual_capture(self):
+        """Manual capture button trigger."""
         ret, frame = self.video_thread.cap.read()
         if ret:
-            image_path = "captured_image.jpg"
-            cv2.imwrite(image_path, frame)
+            self.capture_image(frame)
 
-            pixmap = QPixmap(image_path)
-            target_size = self.captured_image_label.size()
-            pixmap = pixmap.scaled(target_size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-            self.captured_image_label.setPixmap(pixmap)
+    def process_image(self):
+        """Send the captured image and data to AI processing."""
+        data = {
+            "text": self.text_input.toPlainText(),
+            "temperature": self.env_label.text(),
+            "image_url": self.history_select.currentText()
+        }
+        response = requests.post("http://your-ai-server.com/process", json=data)
+        print("✅ Process Request Sent:", response.json())
 
-            print(f"📸 Captured Image of {self.selected_object} Saved!")
-        else:
-            print("❌ Failed to capture image.")
-
-    def closeEvent(self, event):
-        """Stops video processing and closes application."""
+    def close_application(self):
+        """Stop the video thread and exit."""
         self.video_thread.stop()
-        event.accept()
+        sys.exit()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

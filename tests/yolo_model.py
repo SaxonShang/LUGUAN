@@ -25,38 +25,67 @@ class YOLO:
         except Exception as e:
             raise RuntimeError(f"❌ Error loading YOLO model: {e}")
 
-    def detect_objects(self, image_path):
+    def detect_objects(self, image_input):
         """
-        Runs object detection on an image and returns detected objects with bounding box coordinates.
+        Runs YOLOv5 object detection on an image or frame.
+
+        Args:
+            image_input (str or np.ndarray): Image file path or OpenCV frame.
 
         Returns:
             List[dict]: Detected objects with bounding boxes.
         """
-        if not Path(image_path).exists():
-            print(f"❌ Error: Image not found at {image_path}")
-            return []
-
         try:
-            results = self.model(image_path)
-            detections = results.pandas().xyxy[0]  # Convert to Pandas DataFrame
-            detected_objects = []
+            if isinstance(image_input, str):  # File path
+                if not Path(image_input).exists():
+                    print(f"❌ Error: Image file '{image_input}' not found!")
+                    return []
+                results = self.model(image_input)
 
-            for _, row in detections.iterrows():
-                detected_objects.append({
-                    "name": row["name"],
-                    "xmin": int(row["xmin"]),
-                    "ymin": int(row["ymin"]),
-                    "xmax": int(row["xmax"]),
-                    "ymax": int(row["ymax"]),
-                    "confidence": float(row["confidence"])
-                })
+            elif isinstance(image_input, np.ndarray):  # OpenCV frame
+                results = self.model(image_input)
 
-            print(f"✅ Detected objects: {detected_objects}")
-            return detected_objects  # Return list of dictionaries
+            else:
+                print("❌ Error: Unsupported image format!")
+                return []
+
+            detections = results.pandas().xyxy[0]
+            detected_objects = [
+                {"name": row["name"], "xmin": int(row["xmin"]), "ymin": int(row["ymin"]),
+                 "xmax": int(row["xmax"]), "ymax": int(row["ymax"]), "confidence": float(row["confidence"])}
+                for _, row in detections.iterrows()
+            ]
+
+            return detected_objects
 
         except Exception as e:
             print(f"❌ YOLO detection failed: {e}")
             return []
+
+    def detect_objects_in_frame(self, frame, target_object=None):
+        """
+        Detect objects in a given frame and return bounding box details.
+
+        Args:
+            frame (numpy.ndarray): The frame/image for detection.
+            target_object (str, optional): If specified, only show bounding boxes for this object.
+
+        Returns:
+            numpy.ndarray: The frame with bounding boxes drawn (if applicable).
+        """
+        detections = self.detect_objects(frame)
+
+        for obj in detections:
+            if target_object is None or obj["name"].lower() == target_object.lower():
+                x1, y1, x2, y2 = obj["xmin"], obj["ymin"], obj["xmax"], obj["ymax"]
+                confidence = obj["confidence"]
+
+                # Draw bounding box on the frame
+                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                cv2.putText(frame, f"{obj['name']} {confidence:.2f}",
+                            (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+
+        return frame
 
     def detect_from_camera(self, target_object):
         """
@@ -81,13 +110,9 @@ class YOLO:
                     print("❌ Failed to capture frame")
                     continue
 
-                # Convert frame to image file for YOLO detection
-                temp_image_path = "temp_frame.jpg"
-                cv2.imwrite(temp_image_path, frame)
-
-                detected_objects = self.detect_objects(temp_image_path)
+                detected_objects = self.detect_objects(frame)
                 for obj in detected_objects:
-                    if obj["name"] == target_object:
+                    if obj["name"].lower() == target_object.lower():
                         print(f"🎯 Target object '{target_object}' detected!")
                         cap.release()
                         return True  # Stop detection when object is found
@@ -98,44 +123,3 @@ class YOLO:
             cap.release()
 
         return False
-
-    def detect_objects_in_frame(self, frame, target_object=None):
-        """
-        Detect objects in a given frame and return bounding box details.
-
-        Args:
-            frame (numpy.ndarray): The frame/image for detection.
-            target_object (str, optional): If specified, only show bounding boxes for this object.
-
-        Returns:
-            numpy.ndarray: The frame with bounding boxes drawn (if applicable).
-        """
-        temp_image_path = "temp_frame.jpg"
-        cv2.imwrite(temp_image_path, frame)
-        detections = self.detect_objects(temp_image_path)
-
-        if isinstance(detections, list):
-            for obj in detections:
-                if target_object is None or obj["name"] == target_object:
-                    x1, y1, x2, y2 = obj["xmin"], obj["ymin"], obj["xmax"], obj["ymax"]
-                    confidence = obj["confidence"]
-
-                    # Draw bounding box on the frame
-                    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                    cv2.putText(frame, f"{obj['name']} {confidence:.2f}",
-                                (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
-
-        return frame  # Return frame with bounding box
-
-# ✅ Example Usage (for Testing)
-if __name__ == "__main__":
-    yolo = YOLO()
-    
-    # Test 1: Detect objects from an image
-    test_image = "test.jpg"  # Replace with a valid image path
-    objects = yolo.detect_objects(test_image)
-    print("🖼️ Detected Objects:", objects)
-
-    # Test 2: Real-time object detection from camera
-    detected = yolo.detect_from_camera("person")  # Replace "person" with any target class
-    print(f"📸 Object Detected: {detected}")
