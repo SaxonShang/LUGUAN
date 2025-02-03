@@ -167,6 +167,4 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = CameraApp()
     window.show()
-    sys
-::contentReference[oaicite:0]{index=0}
- 
+    sys.exit(app.exec_())  # 🔥 Corrected syntax error
