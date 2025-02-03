@@ -1,5 +1,5 @@
 {
-    "broker": "mqtt.your-broker.com",
+    "broker": "test.mosquitto.org",
     "port": 1883,
     "publish_topic": "raspberrypi/capture",
     "subscribe_topic": "raspberrypi/generated_image"
