@@ -8,7 +8,7 @@ This project is a **smart AI-based detection and capture system** that integrate
 - **Firebase Integration**: Captured images are stored in Firebase Storage for later use.
 - **AI Processing via HTTP**: The Raspberry Pi sends metadata to an AI server that retrieves images from Firebase and processes them.
 - **MQTT Communication**: AI-processed images are sent back to the Raspberry Pi via MQTT for display.
-- **Temperature & Humidity Monitoring**: Real-time sensor data is captured along with the images.
+- **Temperature & Humidity Monitoring**: Real-time sensor data is displayed in the UI.
 - **User Interface (UI)**: Provides an intuitive UI for object selection, image display, and interaction.
 
 ## System Architecture
