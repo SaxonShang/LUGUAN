@@ -204,7 +204,8 @@ class CameraApp(QWidget):
             "temperature": self.env_label.text(),
             "image_url": self.history_select.currentText()
         }
-        requests.post("http://your-ai-server.com/process", json=data)
+        requests.post("http://your-private-server-ip:5000/process_image", json=data)
+
 
     def clear_database_and_exit(self):
         """Clears Firebase data and exits the application."""

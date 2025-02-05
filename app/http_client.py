@@ -4,41 +4,39 @@ import time
 
 # ✅ Load HTTP Configuration
 try:
-    with open("config/http_config.json", "r") as f:
+    with open("config/ai_config.json", "r") as f:
         config = json.load(f)
 
     API_URL = config["api_url"]
-    API_KEY = config.get("api_key", None)  # API Key is optional
+    API_KEY = config.get("api_key", None)  # Not required for local API
 
     print("✅ HTTP Client Initialized.")
 except Exception as e:
-    print(f"❌ Error loading HTTP configuration: {e}")
+    print(f"❌ Error loading AI configuration: {e}")
 
-def send_metadata_to_ai(metadata, retries=3):
+def send_image_to_ai(metadata, retries=3):
     """
-    Sends metadata (without image) to AI API via HTTP.
+    Sends image + metadata to Stable Diffusion API.
     
     Args:
-        metadata (dict): Contains object name, temperature, humidity, user text.
-        retries (int): Number of retry attempts in case of failure.
+        metadata (dict): Contains object name, user text, and image URL.
+        retries (int): Number of retry attempts.
     
     Returns:
         str: Processed image URL if successful, None otherwise.
     """
+    if "image_url" not in metadata:
+        print("❌ Error: Metadata missing required 'image_url' key.")
+        return None
+
     payload = {
-        "object": metadata["object"],
-        "temperature": metadata["temperature"],
-        "humidity": metadata["humidity"],
-        "text": metadata["text"]
+        "init_images": [metadata.get("image_url", "")],
+        "prompt": metadata.get("text", "No user text provided"),
+        "controlnet_conditioning_scale": 1.0,
+        "controlnet_model": "canny"
     }
 
-    headers = {
-        "Content-Type": "application/json"
-    }
-
-    # ✅ Include API Key if required
-    if API_KEY:
-        headers["Authorization"] = f"Bearer {API_KEY}"
+    headers = {"Content-Type": "application/json"}
 
     attempt = 0
     while attempt < retries:
@@ -47,7 +45,7 @@ def send_metadata_to_ai(metadata, retries=3):
 
             if response.status_code == 200:
                 data = response.json()
-                processed_image_url = data.get("processed_image_url", None)
+                processed_image_url = data.get("output", None)
 
                 if processed_image_url:
                     print(f"✅ AI Processing Completed: {processed_image_url}")
@@ -56,7 +54,7 @@ def send_metadata_to_ai(metadata, retries=3):
                     print("⚠️ AI response did not contain a processed image URL.")
                     return None
             else:
-                print(f"❌ Error sending metadata: {response.status_code} - {response.text}")
+                print(f"❌ Error sending image: {response.status_code} - {response.text}")
 
         except requests.exceptions.RequestException as e:
             print(f"❌ HTTP Request Failed (Attempt {attempt + 1}/{retries}): {e}")
@@ -64,5 +62,5 @@ def send_metadata_to_ai(metadata, retries=3):
         attempt += 1
         time.sleep(2)  # Wait before retrying
 
-    print("❌ AI metadata request failed after multiple attempts.")
+    print("❌ AI request failed after multiple attempts.")
     return None

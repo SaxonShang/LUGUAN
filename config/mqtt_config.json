@@ -1,5 +1,5 @@
 {
-    "broker": "test.mosquitto.org",
+    "broker": "your-private-broker.com",
     "port": 1883,
     "publish_topic": "raspberrypi/capture",
     "subscribe_topic": "raspberrypi/generated_image"

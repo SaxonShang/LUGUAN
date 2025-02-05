@@ -1,4 +1,0 @@
-{
-    "api_url": "http://your-ai-server-ip:5000/process_image",
-    "api_key": "your-api-key"
-}
