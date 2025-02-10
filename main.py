@@ -9,6 +9,12 @@ import base64
 import subprocess
 import threading
 
+import os
+
+# 确保DISPLAY指向本地显示器
+os.environ["DISPLAY"] = ":0"
+
+
 
 bus = smbus2.SMBus(1)
 # 启动 MJPG-Streamer
@@ -56,7 +62,8 @@ def on_message(client, userdata, msg):
             with open(IMAGE_PATH, "wb") as f:
                 f.write(image_data)
             print(f"图片已保存到 {IMAGE_PATH}")
-            os.system(f"feh -F {IMAGE_PATH}")  
+            os.system("sudo fbi -T 1 -d /dev/fb0 -a {}".format(IMAGE_PATH))
+ 
         except Exception as e:
             print(f"图片处理失败: {e}")
     elif msg.topic == MQTT_TOPIC:  # 处理传感器数据
@@ -96,7 +103,7 @@ def read_and_upload_sensor_data():
         hum = read_humidity()
         payload = {"temperature": round(temp, 2), "humidity": round(hum, 2), "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")}
         client.publish(MQTT_TOPIC, json.dumps(payload))
-        db.reference("sensor_data").push(payload)
+        db.reference("sensor_data").set(payload)
         print(f"已上传: {payload}")
         time.sleep(3)
 
@@ -105,3 +112,4 @@ start_mjpg_streamer()
 
 while True:
     time.sleep(1)
+
