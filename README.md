@@ -25,6 +25,7 @@ SAD is a **smart AI-based detection and capture system** that integrates **YOLO 
 python3 -m venv venv
 source venv/bin/activate  # Linux/Mac
 venv\Scripts\activate    # Windows
+sudo apt install fbi startx
 pip install -r requirements_pi.txt
 ```
 ### 2️⃣ Local Setup
