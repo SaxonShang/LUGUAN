@@ -107,8 +107,6 @@ python ./ui/app_ui.py
 
 ## UI Information
 
-This **PyQt-based UI** serves as the central control panel for object detection, automatic image capture, AI processing, and real-time sensor monitoring. Below is an overview you can copy straight into your README.
-
 - **Automatic Object Detection**  
   Select a target object (e.g., "Person", "Car", "Dog"). The UI monitors the live camera feed with YOLO, and automatically captures a frame once the chosen object is continuously detected.
 
