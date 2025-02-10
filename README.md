@@ -41,28 +41,57 @@ venv\Scripts\activate    # Windows
 pip install -r requirements.txt
 ```
 
-## Configuration
 ### Firebase Setup
-1. **Create a Firebase Project** (https://console.firebase.google.com/).
-2. **Enable Firebase Storage & Firestore**.
-3. **Download the service account JSON file** and place it in `config/firebase_config.json`.
+1. **Create a Firebase Project**  
+   - Go to the [Firebase Console](https://console.firebase.google.com/), create a new project (or use an existing one).
 
-### MQTT Configuration (`config/mqtt_config.json`)
-```json
-{
-    "broker": "mqtt.your-broker.com",
-    "port": 1883,
-    "publish_topic": "raspberrypi/capture",
-    "subscribe_topic": "raspberrypi/generated_image"
-}
-```
-### HTTP API Configuration (`config/http_config.json`)
-```json
-{
-    "api_url": "http://your-ai-server/process_image",
-    "api_key": "your-api-key"
-}
-```
+2. **Enable Realtime Database**  
+   - In the **Build** section of the Firebase console, select **Realtime Database** and click **Create Database** if it’s not already enabled.
+   - Follow the prompts to configure read/write rules as desired (or keep defaults for testing).
+
+3. **Download the Service Account JSON**  
+   - Navigate to **Project Settings** > **Service Accounts** > **Generate new private key**.
+   - Save the JSON file to `config/firebase_config.json` (or wherever your code expects it).
+
+4. **Replace the databaseURL in `ui/app_ui.py`**  
+   - Locate the Firebase initialization code, for example:
+     ```python
+     cred = credentials.Certificate("config/firebase_config.json")
+     firebase_admin.initialize_app(cred, {
+         "databaseURL": "https://your-project-id.firebaseio.com/"
+     })
+     ```
+   - Replace `"https://your-project-id.firebaseio.com/"` with your **Realtime Database** URL, found in your Firebase console (e.g., `"https://<PROJECT_ID>-default-rtdb.firebaseio.com/"`).
+
+---
+
+### MQTT Setup (HiveMQ Cloud)
+1. **Create a HiveMQ Cloud Account**  
+   - Visit [HiveMQ Cloud](https://www.hivemq.com/mqtt-cloud-broker/) and sign up (or log in if you already have an account).
+
+2. **Obtain Broker Details**  
+   - In your HiveMQ Cloud dashboard, locate your **hostname**, **port**, **username**, and **password**.  
+   - Example:  
+     - **Broker/Hostname**: `a1b2c3d4e5f6.s1.eu.hivemq.cloud`  
+     - **Port**: `8883` (TLS)  
+
+3. **Update Your MQTT Config in Code**  
+   - In your Python scripts (e.g., `ui/app_ui.py`, `pi/main.py`) where you configure MQTT:
+     ```python
+     BROKER_URL = "a1b2c3d4e5f6.s1.eu.hivemq.cloud"
+     PORT = 8883
+     USERNAME = "YourHiveMQUsername"
+     PASSWORD = "YourHiveMQPassword"
+     ```
+   - Ensure you call `client.tls_set()` if using **port 8883** (TLS).
+
+4. **Specify Topics**  
+   - Subscribe to and publish on the same topics across your devices (e.g., `"IC.embedded/LUGUAN/test"`) so they can communicate properly.
+
+5. **Test the Connection**  
+   - Run your script and check the console for a successful connection message (e.g. `"✅ Connected to HiveMQ Cloud!"`).
+   - If you encounter errors, verify your hostname, credentials, and port number in the HiveMQ Cloud console.
+
 
 ## Running the System
 ### 1️⃣ Start the AI Server (on a separate machine)
