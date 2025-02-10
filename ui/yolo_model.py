@@ -15,11 +15,11 @@ class YOLO:
         """Loads the YOLOv5 model from a given path."""
         if not Path(model_path).exists():
             print(f"⚠️ Custom model not found. Loading default YOLOv5s model...")
-            model_path = "yolov5s.pt"  # Download from Ultralytics if not found
+            model_path = "yolov5s.pt"  # Will auto-download from Ultralytics if not found
 
         try:
             model = torch.hub.load("ultralytics/yolov5", "custom", path=model_path, force_reload=False)
-            model.to(self.device)  # ✅ Send model to the appropriate device (GPU/CPU)
+            model.to(self.device)  # ✅ Send model to appropriate device (GPU/CPU)
             print(f"✅ YOLO Model Loaded: {model_path} (Running on {self.device})")
             return model
         except Exception as e:
@@ -51,11 +51,16 @@ class YOLO:
 
             detections = results.pandas().xyxy[0]
             detected_objects = [
-                {"name": row["name"], "xmin": int(row["xmin"]), "ymin": int(row["ymin"]),
-                 "xmax": int(row["xmax"]), "ymax": int(row["ymax"]), "confidence": float(row["confidence"])}
+                {
+                    "name": row["name"],
+                    "xmin": int(row["xmin"]),
+                    "ymin": int(row["ymin"]),
+                    "xmax": int(row["xmax"]),
+                    "ymax": int(row["ymax"]),
+                    "confidence": float(row["confidence"])
+                }
                 for _, row in detections.iterrows()
             ]
-
             return detected_objects
 
         except Exception as e:
@@ -64,14 +69,14 @@ class YOLO:
 
     def detect_objects_in_frame(self, frame, target_object=None):
         """
-        Detect objects in a given frame and return bounding box details.
+        Detect objects in a given frame and draw bounding boxes for `target_object` if specified.
 
         Args:
             frame (numpy.ndarray): The frame/image for detection.
             target_object (str, optional): If specified, only show bounding boxes for this object.
 
         Returns:
-            numpy.ndarray: The frame with bounding boxes drawn (if applicable).
+            numpy.ndarray: The frame with bounding boxes drawn.
         """
         detections = self.detect_objects(frame)
 
@@ -83,7 +88,11 @@ class YOLO:
                 # Draw bounding box on the frame
                 cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
                 cv2.putText(frame, f"{obj['name']} {confidence:.2f}",
-                            (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+                            (x1, y1 - 10),
+                            cv2.FONT_HERSHEY_SIMPLEX, 
+                            0.8, 
+                            (0, 255, 0), 
+                            2)
 
         return frame
 
@@ -98,7 +107,7 @@ class YOLO:
         Returns:
             bool: True if the object is detected, False otherwise.
         """
-        cap = cv2.VideoCapture(0)  # Open laptop camera
+        cap = cv2.VideoCapture(0)  # Open default camera
         if not cap.isOpened():
             print("❌ Error: Cannot open camera")
             return False

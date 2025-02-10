@@ -1,1 +1,13 @@
+自定义选项
+状态展示
+mqtt：start stop
+AI模型选择
+软件打包
+硬件初始化简化
 
+储存input 
+储存返回output
+
+
+ui process: http通讯AI 
+AI通过mqtt返回pi
