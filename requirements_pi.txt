@@ -1,26 +1,3 @@
-# Core Libraries
-numpy
-opencv-python-headless  # For image handling
-
-# Object Detection (if needed)
-torch
-torchvision
-ultralytics
-
-# Firebase
-firebase-admin
-
-# MQTT
+smbus2
 paho-mqtt
-
-# Web Requests (AI API)
-requests
-
-# LED Display
-pygame
-
-# Utilities
-pillow
-json5
-logging
-psutil
+firebase-admin
