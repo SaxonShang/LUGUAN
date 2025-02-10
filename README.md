@@ -132,7 +132,7 @@ This **PyQt-based UI** serves as the central control panel for object detection,
 
 - **Workflow**  
   1. Launch the UI: `python .ui/app_ui.py`
-  2. Launch the AI server: 'python ./ai_server/main.py'  
+  2. Launch the AI server: `python .ai_server/main.py` 
   3. Choose an object from the dropdown.  
   4. Wait for auto-capture on detection (indicator turns red).  
   5. (Optional) Click the red indicator to reset detection.  
