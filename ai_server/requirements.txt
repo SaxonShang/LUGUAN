@@ -1,4 +1,11 @@
 fastapi
 uvicorn
-firebase-admin
 paho-mqtt
+Pillow
+
+# Stable Diffusion dependencies
+torch
+diffusers
+transformers
+accelerate
+safetensors
