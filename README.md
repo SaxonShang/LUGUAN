@@ -1,7 +1,7 @@
 # Smart AI Displayer (SAD)
 
 ## Overview
-SAD is a **smart AI-based detection and capture system** that integrates **YOLO object detection, Firebase for image storage, AI processing, and MQTT for real-time image delivery**. The system is designed to detect objects, capture images, process them using AI, and display the processed images on a Raspberry Pi-connected LED screen.
+SAD is a **smart AI-based detection and capture system** that integrates **YOLO object detection, Firebase for image storage, AI processing, and MQTT for real-time image delivery**. The system is designed to generate and display AI processed images on a Raspberry Pi-connected LED screen based on deteced object image, text prompt, real-time temperature and humidity readings.
 
 ## Features
 - **Object Detection**: Uses YOLOv5 to detect user-selected objects (e.g., person, tie, car, dog) through a camera.
@@ -12,34 +12,32 @@ SAD is a **smart AI-based detection and capture system** that integrates **YOLO 
 - **User Interface (UI)**: Provides an intuitive UI for object selection, image display, and interaction.
 
 ## System Architecture
-1. **User selects an object** (e.g., person) and enters optional text.
+1. **User selects an object** (e.g. person) and enters optional text.
 2. **The camera captures an image** when the selected object is detected.
 3. **The image is uploaded to Firebase Storage**.
 4. **Metadata (temperature, humidity, user text) is sent via HTTP to the AI server**.
 5. **The AI server sends the processed image to the Raspberry Pi via MQTT**.
 7. **The Raspberry Pi displays the AI-generated image on an LED screen**.
 
-## Installation
+## Installation after clone
 ### 1️⃣ Raspberry Pi Setup
-```bash
-sudo apt update && sudo apt upgrade -y
-sudo apt install python3-pip python3-venv -y
-```
-### 2️⃣ Clone the Repository
-```bash
-git clone https://github.com/your-repo/ai-smart-capture.git
-cd ai-smart-capture
-```
-### 3️⃣ Set Up Virtual Environment
 ```bash
 python3 -m venv venv
 source venv/bin/activate  # Linux/Mac
 venv\Scripts\activate    # Windows
+pip install -r requirements_pi.txt
 ```
-### 4️⃣ Install Dependencies
+### 2️⃣ Local Setup
 ```bash
-pip install -r requirements.txt
+pip install -r requirements_ui.txt
 ```
+### 3️⃣ Set Up AI server
+```bash
+cd ai_server
+pip install -r requirements.txt
+python download_ai.py
+```
+
 
 ### Firebase Setup
 1. **Create a Firebase Project**  
@@ -94,21 +92,56 @@ pip install -r requirements.txt
 
 
 ## Running the System
-### 1️⃣ Start the AI Server (on a separate machine)
+### 1️⃣ Start the AI Server (on a separate terminal)
 ```bash
-cd ai_server
-uvicorn main:app --host 0.0.0.0 --port 5000
+python ./ai_server/main.py 
 ```
 ### 2️⃣ Run the Raspberry Pi Main Process
 ```bash
-cd app
 python main.py
 ```
 ### 3️⃣ Run the UI (on Laptop)
 ```bash
-cd ui
-python app_ui.py
+python ./ui/app_ui.py
 ```
+
+## UI Information
+
+This **PyQt-based UI** serves as the central control panel for object detection, automatic image capture, AI processing, and real-time sensor monitoring. Below is an overview you can copy straight into your README.
+
+- **Automatic Object Detection**  
+  Select a target object (e.g., "Person", "Car", "Dog"). The UI monitors the live camera feed with YOLO, and automatically captures a frame once the chosen object is continuously detected.
+
+- **Real-Time Preview**  
+  - **Left Panel**: Displays the camera feed, showing bounding boxes for detections.  
+  - **Right Panel**: Shows the most recently captured or AI-processed image.
+
+- **Temperature & Humidity**  
+  The UI subscribes to MQTT messages published by the Raspberry Pi, updating temperature and humidity data at regular intervals.
+
+- **AI Processing**  
+  After capturing, the UI can send the image (plus optional user text) to an AI server (e.g., Stable Diffusion) via HTTP.  
+  Once processed, the AI server publishes the resulting image to MQTT, which the UI automatically displays.
+
+- **History & Database**  
+  If images are saved to Firebase, the **History** dropdown lists previously captured timestamps. Selecting one displays that stored images which could be used for processing.
+
+- **Indicator Button (Green/Red)**  
+  - **Green ("Detecting")**: System is actively looking for the target object.  
+  - **Red ("Captured")**: Detection is paused to prevent repeated captures. **Clicking the red button re-enables new detection**, switching it back to green.
+
+- **Workflow**  
+  1. Launch the UI: `python .ui/app_ui.py`
+  2. Launch the AI server: 'python ./ai_server/main.py'  
+  3. Choose an object from the dropdown.  
+  4. Wait for auto-capture on detection (indicator turns red).  
+  5. (Optional) Click the red indicator to reset detection.  
+  6. Click **Process Image** to send the capture to the AI server.  
+  7. View the processed result in the **right panel**.
+
+- **User Text Input**  
+  A text area for prompts or notes sent with the image (e.g., for style prompts in Stable Diffusion).
+
 ## Future Improvements
 - 🔹 Add more object detection categories.
 - 🔹 Enhance AI processing with style transfer for artistic effects.
