@@ -165,7 +165,7 @@ pipeline = StableDiffusionImg2ImgPipeline.from_pretrained(
   A text area for prompts or notes included with the image (e.g., style prompts for Stable Diffusion).
 
 ## Future Improvements
-- 🔹 Add more object detection categories.
-- 🔹 Enhance AI processing with style transfer for artistic effects.
-- 🔹 Implement Web UI for remote control.
+- Add more object detection categories.
+- Enhance AI processing with style transfer for artistic effects.
+- Implement Web UI for remote control.
 
