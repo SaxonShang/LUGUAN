@@ -3,13 +3,14 @@ import os
 import cv2
 import json
 import requests
-import time  # <-- Needed for timing logic
+import time
+import threading  # <-- For non-blocking AI requests
 import firebase_admin
 from firebase_admin import credentials, db
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout,
-    QPushButton, QTextEdit, QComboBox, QSizePolicy
+    QPushButton, QTextEdit, QComboBox, QSizePolicy, QCheckBox
 )
 from PyQt5.QtGui import QPixmap, QImage
 from datetime import datetime
@@ -23,7 +24,7 @@ MJPEG_STREAM_URL = f"http://{RASPBERRY_PI_IP}:8080/?action=stream"
 # === Firebase Configuration ===
 cred = credentials.Certificate("config/firebase_config.json")
 firebase_admin.initialize_app(cred, {
-    "databaseURL": "https://luguan-8c32d-default-rtdb.europe-west1.firebasedatabase.app/",
+    "databaseURL": "https://luguan-8c32d-default-rtdb.europe-west1.firebasedatabase.app/"
 })
 firebase_ref = db.reference("captured_images")
 firebase_tem = db.reference("captured_images")
@@ -70,7 +71,7 @@ def check_sensor_data():
         print("No latest sensor data available")
         return None, None
 
-# === Video Stream Thread with 3-Second Detection Logic ===
+# === Video Stream Thread ===
 class VideoStreamThread(QThread):
     frame_update = pyqtSignal(QImage)
     object_detected = pyqtSignal()
@@ -84,9 +85,9 @@ class VideoStreamThread(QThread):
             print("Unable to connect to video stream")
         self.last_frame = None
 
-        # 3-second continuous detection logic
+        # 1 second detection threshold
+        self.detection_threshold = 1.0
         self.detection_start_time = None
-        self.detection_threshold = 1.0  # seconds required to see the object continuously
 
     def run(self):
         while self.running:
@@ -97,39 +98,32 @@ class VideoStreamThread(QThread):
 
             self.last_frame = frame.copy()
 
-            # Draw bounding boxes (for display)
+            # Draw bounding boxes
             processed_frame = yolo.detect_objects_in_frame(frame, self.selected_object)
 
-            # Convert frame for PyQt
+            # Convert to QImage
             rgb_image = cv2.cvtColor(processed_frame, cv2.COLOR_BGR2RGB)
             h, w, ch = rgb_image.shape
             bytes_per_line = ch * w
             qt_image = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format_RGB888)
             self.frame_update.emit(qt_image)
 
-            # Detect object in the raw frame
+            # Detect if target is found
             detected_objects = yolo.detect_objects(frame)
-            target_found = False
-            for obj in detected_objects:
-                if obj["name"].lower() == self.selected_object.lower():
-                    target_found = True
-                    break
+            target_found = any(
+                obj["name"].lower() == self.selected_object.lower()
+                for obj in detected_objects
+            )
 
-            # If object is found, start or continue the timer
             if target_found:
                 if self.detection_start_time is None:
-                    # First time we see the object
                     self.detection_start_time = time.time()
                 else:
-                    # Check how long it's been visible
                     elapsed = time.time() - self.detection_start_time
                     if elapsed >= self.detection_threshold:
-                        # We've seen the object continuously for at least 3 seconds
                         self.object_detected.emit()
-                        # Reset so we only capture once (or comment this out for repeated captures)
                         self.detection_start_time = None
             else:
-                # Object lost; reset timer
                 self.detection_start_time = None
 
         self.cap.release()
@@ -148,33 +142,36 @@ class CameraApp(QWidget):
         self.selected_object = "person"
         self.load_history()
 
-        # Controlling capture flow
         self.can_capture = True
         self.last_captured_frame = None
 
-        # Timer for sensor data
+        # Periodic sensor updates
         self.sensor_timer = QTimer(self)
         self.sensor_timer.timeout.connect(self.detect_ht)
-        self.sensor_timer.start(3000)  # update every 3 seconds
+        self.sensor_timer.start(3000)
 
-        # Start the video thread
+        # Start video thread
         self.video_thread = VideoStreamThread(self.selected_object)
         self.video_thread.frame_update.connect(self.update_video_feed)
         self.video_thread.object_detected.connect(self.capture_image)
         self.video_thread.start()
 
+        # 30-minute cooldown in ms (30 * 60 * 1000)
+        self.capture_cooldown = 30 * 60 * 1000
+
     def init_ui(self):
         main_layout = QVBoxLayout()
         main_layout.setContentsMargins(0, 0, 0, 0)
 
-        # --- Top Section ---
         top_row = QHBoxLayout()
 
-        # Left Controls
         left_controls = QVBoxLayout()
 
         self.object_select = QComboBox()
-        self.object_select.addItems(["Person", "Vase", "Car", "Dog","Book","Bottle","Clock","Potted Plant","Window","Lamp"])
+        self.object_select.addItems([
+            "Person", "Vase", "Car", "Dog", "Book",
+            "Bottle", "Clock", "Potted Plant", "Window", "Lamp"
+        ])
         self.object_select.setFixedHeight(50)
         self.object_select.currentIndexChanged.connect(self.update_selected_object)
         left_controls.addWidget(self.object_select)
@@ -228,6 +225,10 @@ class CameraApp(QWidget):
         self.detection_indicator.clicked.connect(self.reset_detection)
         left_controls.addWidget(self.detection_indicator)
 
+        self.auto_process_checkbox = QCheckBox("Auto Process")
+        self.auto_process_checkbox.setStyleSheet("font-size: 18px;")
+        left_controls.addWidget(self.auto_process_checkbox)
+
         right_info = QVBoxLayout()
         self.env_label = QLabel("Temperature: --°C  |  Humidity: --%")
         self.env_label.setAlignment(Qt.AlignCenter)
@@ -244,7 +245,6 @@ class CameraApp(QWidget):
         top_row.addLayout(right_info, 3)
         main_layout.addLayout(top_row)
 
-        # --- Bottom Section ---
         video_capture_layout = QHBoxLayout()
 
         self.video_label = QLabel("Camera Feed")
@@ -260,6 +260,8 @@ class CameraApp(QWidget):
         main_layout.addLayout(video_capture_layout)
         self.setLayout(main_layout)
 
+    # === DETECTION & CAPTURE ===
+
     def update_selected_object(self):
         self.selected_object = self.object_select.currentText().lower()
         self.video_thread.selected_object = self.selected_object
@@ -272,30 +274,85 @@ class CameraApp(QWidget):
 
     def capture_image(self):
         """
-        Called automatically after 3s of detection by `object_detected`,
-        or manually by self.capture_button clicked (if you want that).
+        Called automatically or manually. Enforces a 30-min cooldown.
         """
         if not self.can_capture:
-            return
-        if self.video_thread.last_frame is not None:
-            frame = self.video_thread.last_frame
-            self.last_captured_frame = frame.copy()
-            qt_image = QImage(frame.data, frame.shape[1], frame.shape[0],
-                              frame.shape[2] * frame.shape[1], QImage.Format_BGR888)
-            self.captured_image_label.setPixmap(QPixmap.fromImage(qt_image))
-
-            self.update_indicator("red")
-            self.can_capture = False
-
-            # Reset history select to default
-            self.history_select.setCurrentIndex(0)
-        else:
+            return  # Already in cooldown
+        if self.video_thread.last_frame is None:
             print("No video frame available.")
+            return
+
+        frame = self.video_thread.last_frame
+        self.last_captured_frame = frame.copy()
+        qt_image = QImage(frame.data, frame.shape[1], frame.shape[0],
+                          frame.shape[2] * frame.shape[1], QImage.Format_BGR888)
+        self.captured_image_label.setPixmap(QPixmap.fromImage(qt_image))
+
+        self.update_indicator("red")
+        self.can_capture = False
+        self.history_select.setCurrentIndex(0)
+
+        # Auto Process if checkbox is checked
+        if self.auto_process_checkbox.isChecked():
+            self.process_image_async()
+
+        # Start a 30-min cooldown
+        QTimer.singleShot(self.capture_cooldown, self.enable_capture)
+        print("Capture made, entering 30-min cooldown.")
+
+    def enable_capture(self):
+        """
+        Re-enable capturing after the 30-min cooldown ends.
+        """
+        self.can_capture = True
+        self.update_indicator("green")
+        print("Cooldown ended. Ready for next capture.")
+
+    # === NON-BLOCKING PROCESSING ===
+
+    def process_image_async(self):
+        """
+        Run process_image_blocking in a background thread.
+        """
+        thread = threading.Thread(target=self.process_image_blocking, daemon=True)
+        thread.start()
+
+    def process_image_blocking(self):
+        try:
+            key = self.upload_or_select_history()
+            if not key:
+                print("No valid image data or history key.")
+                return
+
+            ref = db.reference(f"image_capture/{self.selected_object}/image_capture/{key}")
+            data = ref.get()
+            if not data or "image_data" not in data:
+                print("No image_data found in Firebase for this entry.")
+                return
+
+            image_data = data["image_data"]
+            payload = {
+                "text": self.text_input.toPlainText(),
+                "temperature": self.env_label.text(),
+                "image_data": image_data
+            }
+            print("Sending image to AI server...")
+            response = requests.post("http://127.0.0.1:5000/process_image", json=payload)
+            print("Process response:", response.json())
+
+        except Exception as e:
+            print(f"Error during process_image_blocking: {e}")
 
     def process_image(self):
         """
-        Upload the captured image if no history is selected,
-        then send it to your AI server.
+        Blocking call if the user clicks "Process Image".
+        """
+        self.process_image_blocking()
+
+    def upload_or_select_history(self):
+        """
+        If no history is selected, upload the newly captured frame.
+        Otherwise, use the selected history item.
         """
         if self.history_select.currentIndex() <= 0:
             if self.last_captured_frame is not None:
@@ -314,42 +371,21 @@ class CameraApp(QWidget):
                     "image_data": img_base64,
                     "object": self.selected_object
                 })
-
                 self.load_history()
                 os.remove(image_path)
+                return new_ref.key
             else:
                 print("No captured image to process.")
-                return
+                return None
+        else:
+            key = self.history_select.currentData()
+            if not key:
+                return None
+            return key
 
-        # Auto-select latest history if none was chosen
-        if self.history_select.currentIndex() <= 0 and self.history_select.count() > 1:
-            self.history_select.setCurrentIndex(self.history_select.count() - 1)
-        if self.history_select.currentIndex() <= 0:
-            print("No history image available to process.")
-            return
-
-        key = self.history_select.currentData()
-        if not key:
-            print("No valid history key found.")
-            return
-
-        ref = db.reference(f"image_capture/{self.selected_object}/image_capture/{key}")
-        data = ref.get()
-        if not data or "image_data" not in data:
-            print("No image_data found in Firebase for this entry.")
-            return
-
-        image_data = data["image_data"]
-        payload = {
-            "text": self.text_input.toPlainText(),
-            "temperature": self.env_label.text(),
-            "image_data": image_data
-        }
-        response = requests.post("http://your-private-server-ip:5000/process_image", json=payload)
-        print("Process response:", response.json())
+    # === UI METHODS & SENSOR UPDATES ===
 
     def detect_ht(self):
-        """Update temperature and humidity every 3s."""
         temperature, humidity = check_sensor_data()
         if temperature is not None and humidity is not None:
             self.env_label.setText(f"Temperature: {temperature}°C  |  Humidity: {humidity}%")
@@ -358,7 +394,6 @@ class CameraApp(QWidget):
         self.env_label.repaint()
 
     def load_history(self):
-        """Load timestamps from Firebase for the selected object."""
         ref = db.reference(f"image_capture/{self.selected_object}/image_capture")
         data = ref.get()
         self.history_select.clear()
@@ -369,7 +404,6 @@ class CameraApp(QWidget):
                 self.history_select.addItem(timestamp, key)
 
     def display_history_image(self):
-        """Display the image for the selected history timestamp."""
         if self.history_select.currentIndex() <= 0:
             return
         key = self.history_select.currentData()
@@ -388,28 +422,32 @@ class CameraApp(QWidget):
 
     def update_indicator(self, status):
         if status.lower() == "green":
-            self.detection_indicator.setStyleSheet("background-color: green; border: 1px solid black; font-size: 18px;")
+            self.detection_indicator.setStyleSheet(
+                "background-color: green; border: 1px solid black; font-size: 18px;"
+            )
             self.detection_indicator.setText("Detecting")
         elif status.lower() == "red":
-            self.detection_indicator.setStyleSheet("background-color: red; border: 1px solid black; font-size: 18px;")
+            self.detection_indicator.setStyleSheet(
+                "background-color: red; border: 1px solid black; font-size: 18px;"
+            )
             self.detection_indicator.setText("Captured")
 
     def reset_detection(self):
-        """When the indicator is red, click to re-enable detection."""
+        """
+        If user clicks the red indicator, override the 30-min cooldown and re-enable detection.
+        """
         if not self.can_capture:
             self.can_capture = True
             self.update_indicator("green")
-            # Reset the history select to default
             self.history_select.setCurrentIndex(0)
+            print("Manual reset: detection re-enabled before cooldown ended.")
 
     def clear_database(self):
-        """Clear the entire captured_images data."""
         firebase_ref.set({})
         firebase_tem.set({})
         print("Database cleared.")
 
     def closeEvent(self, event):
-        """Ensure we stop the thread on UI close."""
         self.video_thread.stop()
         event.accept()
 
