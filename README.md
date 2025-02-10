@@ -121,24 +121,28 @@ python ./ui/app_ui.py
   After capturing, the UI can send the image (plus optional user text) to an AI server (e.g., Stable Diffusion) via HTTP.  
   Once processed, the AI server publishes the resulting image to MQTT, which the UI automatically displays.
 
+- **Auto Process Checkbox**  
+  If this is **checked**, the system **automatically processes** each newly captured image—no need to manually click **“Process Image.”**  
+  If **unchecked**, you can still manually trigger processing by clicking the **Process Image** button.
+
 - **History & Database**  
-  If images are saved to Firebase, the **History** dropdown lists previously captured timestamps. Selecting one displays that stored images which could be used for processing.
+  If images are saved to Firebase, the **History** dropdown lists previously captured timestamps. Selecting one displays that stored image, which can be used for reprocessing or review.
 
 - **Indicator Button (Green/Red)**  
-  - **Green ("Detecting")**: System is actively looking for the target object.  
+  - **Green ("Detecting")**: System is actively looking for the selected object.  
   - **Red ("Captured")**: Detection is paused to prevent repeated captures. **Clicking the red button re-enables new detection**, switching it back to green.
 
 - **Workflow**  
-  1. Launch the UI: `python .ui/app_ui.py`
-  2. Launch the AI server: `python .ai_server/main.py` 
-  3. Choose an object from the dropdown.  
-  4. Wait for auto-capture on detection (indicator turns red).  
-  5. (Optional) Click the red indicator to reset detection.  
-  6. Click **Process Image** to send the capture to the AI server.  
-  7. View the processed result in the **right panel**.
+  1. **Launch the UI**: `python ui/app_ui.py`  
+  2. **Launch the AI Server**: `python ai_server/main.py` (if on separate machine, adjust IP)  
+  3. **Select an Object** from the dropdown.  
+  4. **Auto-Capture** occurs once the chosen object is detected (indicator turns red).  
+  5. *(Optional)* Click the **red indicator** to reset detection.  
+  6. **Process Image** (manually or automatically if the Auto Process box is checked).  
+  7. **View Processed Result** in the **right panel**.
 
 - **User Text Input**  
-  A text area for prompts or notes sent with the image (e.g., for style prompts in Stable Diffusion).
+  A text area for prompts or notes included with the image (e.g., style prompts for Stable Diffusion).
 
 ## Future Improvements
 - 🔹 Add more object detection categories.
