@@ -1,7 +1,7 @@
 # AI Smart Displayer
 
 ## Overview
-This project is a **smart AI-based detection and capture system** that integrates **YOLO object detection, Firebase for image storage, FastAPI for AI processing, and MQTT for real-time image delivery**. The system is designed to detect objects, capture images, process them using AI, and display the processed images on a Raspberry Pi-connected LED screen.
+This project is a **smart AI-based detection and capture system** that integrates **YOLO object detection, Firebase for image storage, AI processing, and MQTT for real-time image delivery**. The system is designed to detect objects, capture images, process them using AI, and display the processed images on a Raspberry Pi-connected LED screen.
 
 ## Features
 - **Object Detection**: Uses YOLOv5 to detect user-selected objects (e.g., person, tie, car, dog) through a camera.
@@ -16,9 +16,8 @@ This project is a **smart AI-based detection and capture system** that integrate
 2. **The camera captures an image** when the selected object is detected.
 3. **The image is uploaded to Firebase Storage**.
 4. **Metadata (temperature, humidity, user text) is sent via HTTP to the AI server**.
-5. **The AI server retrieves the image from Firebase**, processes it, and uploads the AI-generated image back to Firebase.
-6. **The AI server sends the processed image URL to the Raspberry Pi via MQTT**.
-7. **The Raspberry Pi downloads and displays the AI-generated image on an LED screen**.
+5. **The AI server sends the processed image to the Raspberry Pi via MQTT**.
+7. **The Raspberry Pi displays the AI-generated image on an LED screen**.
 
 ## Installation
 ### 1️⃣ Raspberry Pi Setup
