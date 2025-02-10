@@ -104,6 +104,26 @@ python main.py
 ```bash
 python ./ui/app_ui.py
 ```
+## AI choices
+
+- **Automatic Object Detection**  
+  Select a model in `ai_server/main.py` (defalut:openjourney)
+```bash
+pipeline = StableDiffusionImg2ImgPipeline.from_pretrained(
+    #"./ai_server/models/sd_v1_5",
+    #"./ai_server/models/sd_2_1",
+    #"./ai_server/models/dreamlike_photoreal_2",
+    "./ai_server/models/openjourney_local",
+    torch_dtype=torch.float16
+).to("cuda")
+```
+
+- **Temperature & Humidity Interference Approaches**
+  select an approach in `ai_server/main.py` (defalut:Strength & Guidance_scale)
+  - **Modify Prompt**: Append descriptive phrases to the text prompt based on sensor values.  
+  - **Adjust Random Seed**: Derive a custom random seed from the temperature and humidity readings.
+  - **Strength & Guidance_scale**: Map sensor values directly to model parameters.
+
 
 ## UI Information
 
