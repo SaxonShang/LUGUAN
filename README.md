@@ -12,7 +12,7 @@ SAD is a **smart AI-based detection and capture system** that integrates **YOLO 
 - **User Interface (UI)**: Provides an intuitive UI for object selection, image display, and interaction.
 
 ## System Architecture
-1. **User selects an object** (e.g., person, tie) and enters optional text.
+1. **User selects an object** (e.g., person) and enters optional text.
 2. **The camera captures an image** when the selected object is detected.
 3. **The image is uploaded to Firebase Storage**.
 4. **Metadata (temperature, humidity, user text) is sent via HTTP to the AI server**.
@@ -109,22 +109,8 @@ python main.py
 cd ui
 python app_ui.py
 ```
-
-## Testing
-Run individual tests using:
-```bash
-pytest tests/
-```
-
-## Troubleshooting
-- **MQTT Connection Issues?** Check `config/mqtt_config.json` and ensure the broker is reachable.
-- **AI Processing Delays?** Verify `config/http_config.json` and make sure the AI server is running.
-- **No Image Display on LED?** Check the MQTT message log for received image URLs.
-
 ## Future Improvements
 - 🔹 Add more object detection categories.
 - 🔹 Enhance AI processing with style transfer for artistic effects.
 - 🔹 Implement Web UI for remote control.
 
-## License
-MIT License. See `LICENSE` for details.
