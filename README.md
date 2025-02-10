@@ -1,7 +1,7 @@
-# AI Smart Displayer
+# Smart AI Displayer (SAD)
 
 ## Overview
-This project is a **smart AI-based detection and capture system** that integrates **YOLO object detection, Firebase for image storage, AI processing, and MQTT for real-time image delivery**. The system is designed to detect objects, capture images, process them using AI, and display the processed images on a Raspberry Pi-connected LED screen.
+SAD is a **smart AI-based detection and capture system** that integrates **YOLO object detection, Firebase for image storage, AI processing, and MQTT for real-time image delivery**. The system is designed to detect objects, capture images, process them using AI, and display the processed images on a Raspberry Pi-connected LED screen.
 
 ## Features
 - **Object Detection**: Uses YOLOv5 to detect user-selected objects (e.g., person, tie, car, dog) through a camera.
