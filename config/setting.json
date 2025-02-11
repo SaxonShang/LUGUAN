@@ -1,0 +1,12 @@
+{
+    "raspberry_pi_ip": "192.168.141.100",
+    "firebase_database_url": "https://luguan-8c32d-default-rtdb.europe-west1.firebasedatabase.app/",
+    "mqtt": {
+        "broker_url": "45daeea25355436589e73eca1801653e.s1.eu.hivemq.cloud",
+        "port": 8883,
+        "username": "Saxon",
+        "password": "030401@Szh",
+        "topic1": "IC.embedded/LUGUAN/test",
+        "topic2": "IC.embedded/LUGUAN/picture"
+    }
+}
