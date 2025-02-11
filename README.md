@@ -20,14 +20,38 @@ SAD is a **smart AI-based detection and capture system** that integrates **YOLO 
 7. **The Raspberry Pi displays the AI-generated image on an LED screen**.
 
 ## Installation after clone
-### 1️⃣ Raspberry Pi Setup
+## 1️⃣ Raspberry Pi Zero Setup
+
+### **Step 1: Update & Install Dependencies**
+Before setting up the environment, ensure your Raspberry Pi is up to date:
 ```bash
+sudo apt update && sudo apt upgrade -y
+sudo apt install -y fbi startx python3-venv python3-pip libjpeg8-dev cmake
 python3 -m venv venv
-source venv/bin/activate  # Linux/Mac
-venv\Scripts\activate    # Windows
-sudo apt install fbi startx
+source venv/bin/activate
 pip install -r requirements_pi.txt
 ```
+### **Step 2: MJPEG-Streamer Setup (For Camera Streaming)**
+```bash
+cd ~
+git clone https://github.com/jacksonliam/mjpg-streamer.git
+cd mjpg-streamer/mjpg-streamer-experimental
+make
+sudo make install
+mjpg_streamer -o "output_http.so -w ./www" -i "input_raspicam.so -x 1280 -y 720 -fps 30"
+```
+You can access the live stream via: http://<RaspberryPi_IP>:8080/?action=stream
+
+### **Step 3: Update Raspberry Pi IP in Configuration File**
+   - In `config/setting.json`:
+     ```python
+     "raspberry_pi_ip": "192.168.141.100"
+     ```
+Replace the IP with your raspberry pi's IP which can be found with
+```bash
+hostname -I
+```
+
 ### 2️⃣ Local Setup
 ```bash
 pip install -r requirements_ui.txt
@@ -52,14 +76,7 @@ python download_ai.py
    - Navigate to **Project Settings** > **Service Accounts** > **Generate new private key**.
    - Save the JSON file to `config/firebase_config.json` (or wherever your code expects it).
 
-4. **Replace the databaseURL in `ui/app_ui.py`**  
-   - Locate the Firebase initialization code, for example:
-     ```python
-     cred = credentials.Certificate("config/firebase_config.json")
-     firebase_admin.initialize_app(cred, {
-         "databaseURL": "https://your-project-id.firebaseio.com/"
-     })
-     ```
+4. **Replace the databaseURL in `config/setting.json`**  
    - Replace `"https://your-project-id.firebaseio.com/"` with your **Realtime Database** URL, found in your Firebase console (e.g., `"https://<PROJECT_ID>-default-rtdb.firebaseio.com/"`).
 
 ---
@@ -75,40 +92,39 @@ python download_ai.py
      - **Port**: `8883` (TLS)  
 
 3. **Update Your MQTT Config in Code**  
-   - In your Python scripts (e.g., `ui/app_ui.py`, `pi/main.py`) where you configure MQTT:
+   - In `config/setting.json` where you configure MQTT:
      ```python
      BROKER_URL = "a1b2c3d4e5f6.s1.eu.hivemq.cloud"
      PORT = 8883
      USERNAME = "YourHiveMQUsername"
      PASSWORD = "YourHiveMQPassword"
+     "TOPIC1": "ReaingsFromSensor"
+     "TOPIC2": "DisplayedImage"
      ```
-   - Ensure you call `client.tls_set()` if using **port 8883** (TLS).
 
 4. **Specify Topics**  
-   - Subscribe to and publish on the same topics across your devices (e.g., `"IC.embedded/LUGUAN/test"`) so they can communicate properly.
-
+   - Subscribe to and publish on the same topics across your devices (e.g., `"IC.embedded/***/**"`) so they can communicate properly.
+   - Two topics are required for readings and images respectively.
+   
 5. **Test the Connection**  
    - Run your script and check the console for a successful connection message (e.g. `"✅ Connected to HiveMQ Cloud!"`).
    - If you encounter errors, verify your hostname, credentials, and port number in the HiveMQ Cloud console.
 
 
 ## Running the System
-### 1️⃣ Start the AI Server (on a separate terminal)
-```bash
-python ./ai_server/main.py 
-```
-### 2️⃣ Run the Raspberry Pi Main Process
+### Run the Raspberry Pi Main Process
 ```bash
 python main.py
 ```
-### 3️⃣ Run the UI (on Laptop)
+### Run the UI (on Laptop)
 ```bash
 python ./ui/app_ui.py
 ```
-## AI choices
+
+## AI choices in UI
 
 - **Automatic Object Detection**  
-  - Select a model in `ai_server/main.py` (defalut:openjourney)
+  - Select a model
 ```bash
 pipeline = StableDiffusionImg2ImgPipeline.from_pretrained(
     #"./ai_server/models/sd_v1_5",
@@ -120,7 +136,7 @@ pipeline = StableDiffusionImg2ImgPipeline.from_pretrained(
 ```
 
 - **Temperature & Humidity Interference Approaches**
-  - Select an approach in `ai_server/main.py` (defalut:Strength & Guidance_scale)
+  - Select an approach
   - **Modify Prompt**: Append descriptive phrases to the text prompt based on sensor values.  
   - **Adjust Random Seed**: Derive a custom random seed from the temperature and humidity readings.
   - **Strength & Guidance_scale**: Map sensor values directly to model parameters.
@@ -154,13 +170,14 @@ pipeline = StableDiffusionImg2ImgPipeline.from_pretrained(
   - **Red ("Captured")**: Detection is paused to prevent repeated captures. **Clicking the red button re-enables new detection**, switching it back to green.
 
 - **Workflow**  
-  1. **Launch the UI**: `python ui/app_ui.py`  
-  2. **Launch the AI Server**: `python ai_server/main.py` (if on separate machine, adjust IP)  
-  3. **Select an Object** from the dropdown.  
-  4. **Auto-Capture** occurs once the chosen object is detected (indicator turns red).  
-  5. *(Optional)* Click the **red indicator** to reset detection.  
-  6. **Process Image** (manually or automatically if the Auto Process box is checked).  
-  7. **View Processed Result** in the **right panel**.
+  1. **Launch the UI**: `python ui/app_ui.py`
+  2. **Choose the AI Settings** from the dropdown.
+  3. **Launch the AI Server**: Click the 'Launch AI Server'
+  4. **Select an Object** from the dropdown.  
+  5. **Auto-Capture** occurs once the chosen object is detected (indicator turns red).  
+  6. *(Optional)* Click the **red indicator** to reset detection.  
+  7. **Process Image** (manually or automatically if the Auto Process box is checked).  
+  8. **View Processed Result** in the **right panel**.
 
 - **User Text Input**  
   A text area for prompts or notes included with the image (e.g., style prompts for Stable Diffusion).
