@@ -2,9 +2,10 @@ import sys
 import os
 import cv2
 import json
+import subprocess
 import requests
 import time
-import threading  # <-- For non-blocking AI requests
+import threading
 import firebase_admin
 from firebase_admin import credentials, db
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer
@@ -16,16 +17,29 @@ from PyQt5.QtGui import QPixmap, QImage
 from datetime import datetime
 import base64
 import paho.mqtt.client as mqtt
+# === Load Config from JSON ===
+CONFIG_PATH = "config/setting.json"
+AI_SETTINGS_PATH = "config/ai_settings.json"
+
+if not os.path.exists(CONFIG_PATH):
+    raise FileNotFoundError(f"❌ Config file not found: {CONFIG_PATH}")
+
+with open(CONFIG_PATH, "r") as f:
+    config = json.load(f)
 
 # === Raspberry Pi Camera Stream (MJPEG STREAMER) ===
-RASPBERRY_PI_IP = "192.168.141.100"  # Update with actual Pi IP
+if "raspberry_pi_ip" not in config:
+    raise ValueError("❌ Missing 'raspberry_pi_ip' in config/settings.json")
+
+RASPBERRY_PI_IP = config["raspberry_pi_ip"]
 MJPEG_STREAM_URL = f"http://{RASPBERRY_PI_IP}:8080/?action=stream"
 
 # === Firebase Configuration ===
 cred = credentials.Certificate("config/firebase_config.json")
 firebase_admin.initialize_app(cred, {
-    "databaseURL": "https://luguan-8c32d-default-rtdb.europe-west1.firebasedatabase.app/"
+    "databaseURL": config.get("firebase_database_url", "")
 })
+
 firebase_ref = db.reference("captured_images")
 firebase_tem = db.reference("captured_images")
 
@@ -33,7 +47,42 @@ firebase_tem = db.reference("captured_images")
 from yolo_model import YOLO
 yolo = YOLO(model_path="models/yolov5s.pt")
 
-# === MQTT Settings ===
+# === MQTT and AI Settings ===
+mqtt_config = config.get("mqtt", {})
+BROKER_URL = mqtt_config.get("broker_url", "")
+PORT = mqtt_config.get("port", 1883)
+USERNAME = mqtt_config.get("username", "")
+PASSWORD = mqtt_config.get("password", "")
+TOPIC = mqtt_config.get("topic1", "")
+ai_server_process = None
+
+def save_ai_settings(model, approach):
+    """Save the selected AI model & approach to config file."""
+    settings = {"selected_model": model, "selected_approach": approach}
+    os.makedirs("config", exist_ok=True)
+    with open(AI_SETTINGS_PATH, "w") as f:
+        json.dump(settings, f)
+    print(f"✅ Saved AI settings: {settings}")
+
+def launch_ai_server():
+    global ai_server_process
+    if ai_server_process and ai_server_process.poll() is None:
+        print("✅ AI Server is already running!")
+        return
+
+    ai_server_script = os.path.abspath("./ai_server/main.py")
+
+    if sys.platform.startswith("win"):
+        ai_server_process = subprocess.Popen(
+            ["start", "cmd", "/k", f"python {ai_server_script}"], shell=True
+            )
+    else:
+        ai_server_process = subprocess.Popen(
+            ["gnome-terminal", "--", "python3", ai_server_script]
+        )
+
+    print("🚀 AI Server Launched!")
+
 def on_connect(client, userdata, flags, rc):
     if rc == 0:
         print("✅ Connected to MQTT Broker!")
@@ -50,12 +99,7 @@ def on_message(client, userdata, msg):
     except json.JSONDecodeError:
         print("Failed to decode JSON message")
 
-BROKER_URL = "45daeea25355436589e73eca1801653e.s1.eu.hivemq.cloud"
-PORT = 8883  # Secure MQTT over TLS
-USERNAME = "Saxon"
-PASSWORD = "030401@Szh"
-TOPIC = "IC.embedded/LUGUAN/test"
-
+# Initialize MQTT Client
 client = mqtt.Client()
 client.tls_set()
 client.username_pw_set(USERNAME, PASSWORD)
@@ -92,10 +136,6 @@ class VideoStreamThread(QThread):
     def run(self):
         while self.running:
             ret, frame = self.cap.read()
-            if not ret:
-                print("Unable to read video frame")
-                continue
-
             self.last_frame = frame.copy()
 
             # Draw bounding boxes
@@ -136,7 +176,7 @@ class CameraApp(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Smart AI Detection - Version 1.0")
-        self.resize(1200, 800)
+        self.resize(1200, 900)  # Increased height to fit third row
         self.init_ui()
 
         self.selected_object = "person"
@@ -163,6 +203,7 @@ class CameraApp(QWidget):
         main_layout = QVBoxLayout()
         main_layout.setContentsMargins(0, 0, 0, 0)
 
+        # === Top Row: Object Selection, Buttons, Sensor Data ===
         top_row = QHBoxLayout()
 
         left_controls = QVBoxLayout()
@@ -245,6 +286,7 @@ class CameraApp(QWidget):
         top_row.addLayout(right_info, 3)
         main_layout.addLayout(top_row)
 
+        # === Second Row: Video Feed & Captured Image ===
         video_capture_layout = QHBoxLayout()
 
         self.video_label = QLabel("Camera Feed")
@@ -258,6 +300,36 @@ class CameraApp(QWidget):
         video_capture_layout.addWidget(self.captured_image_label)
 
         main_layout.addLayout(video_capture_layout)
+
+        # === Third Row: AI Model Selection & AI Server Launch ===
+        ai_row = QHBoxLayout()
+
+        # AI Model Select
+        self.model_select = QComboBox()
+        self.model_select.addItems([
+            "openjourney_local","sd_v1_5", "sd_2_1", "dreamlike_photoreal_2" 
+        ])
+        self.model_select.setFixedHeight(50)
+        ai_row.addWidget(QLabel("AI Model:"))
+        ai_row.addWidget(self.model_select)
+
+        # AI Approach Select
+        self.approach_select = QComboBox()
+        self.approach_select.addItems([
+            "Map Humidity & Temperature","Modify Prompt", "Adjust Random Seed" 
+        ])
+        self.approach_select.setFixedHeight(50)
+        ai_row.addWidget(QLabel("Processing Approach:"))
+        ai_row.addWidget(self.approach_select)
+
+        # AI Launch Button
+        self.launch_button = QPushButton("Launch AI Server")
+        self.launch_button.setStyleSheet("background-color: orange; font-size: 18px; padding: 10px;")
+        self.launch_button.clicked.connect(self.save_and_launch_ai)
+        ai_row.addWidget(self.launch_button)
+
+        main_layout.addLayout(ai_row)
+
         self.setLayout(main_layout)
 
     # === DETECTION & CAPTURE ===
@@ -309,6 +381,14 @@ class CameraApp(QWidget):
         print("Cooldown ended. Ready for next capture.")
 
     # === NON-BLOCKING PROCESSING ===
+    
+    def save_and_launch_ai(self):
+        """Save selected options & launch AI server."""
+        selected_model = self.model_select.currentText()
+        selected_approach = self.approach_select.currentText()
+        save_ai_settings(selected_model, selected_approach)
+        launch_ai_server()
+
 
     def process_image_async(self):
         """
