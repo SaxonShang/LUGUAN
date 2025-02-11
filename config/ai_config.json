@@ -1,4 +1,0 @@
-{
-    "api_url": "https://api.stability.ai/v2beta/stable-image/controlnet",
-    "api_key": "your-stable-diffusion-api-key"
-}
