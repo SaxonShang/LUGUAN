@@ -143,6 +143,7 @@ pipeline = StableDiffusionImg2ImgPipeline.from_pretrained(
 
 
 ## UI Information
+![Alt text](./ui.png)
 
 - **Automatic Object Detection**  
   Select a target object (e.g., "Person", "Car", "Dog"). The UI monitors the live camera feed with YOLO, and automatically captures a frame once the chosen object is continuously detected.
